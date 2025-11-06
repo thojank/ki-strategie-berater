@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 13: Fix für fehlende Icons)
+# Streamlit RAG (VERSION 14: Fix für Icons, anderer CDN)
 from __future__ import annotations
 
 import os, re
@@ -99,27 +99,27 @@ st.title("🤖 KI-Strategie Berater")
 st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
 # --- CSS-HACK (Minimal & Pragmatisch) ---
-st.markdown("""
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+st.markdown(f"""
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
     <style>
     /* Ändere die Hauptschriftart auf eine System-UI-Schriftart (wie Tailwind) */
-    html, body, [class*="st-"], .st-emotion-cache-1pxfknu, .st-emotion-cache-5rimss p {
+    html, body, [class*="st-"], .st-emotion-cache-1pxfknu, .st-emotion-cache-5rimss p {{
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    }
+    }}
     /* Vergrößere den Hauptcontainer für mehr Platz */
-    .main .block-container {
+    .main .block-container {{
         padding-top: 2rem;
         padding-bottom: 2rem;
         padding-left: 3rem;
         padding-right: 3rem;
-    }
+    }}
     /* Besseres Aussehen für die Chat-Nachrichten */
-    .st-emotion-cache-4z1n4l { /* Chat-Nachrichten-Container */
+    .st-emotion-cache-4z1n4l {{ /* Chat-Nachrichten-Container */
         border-radius: 0.5rem;
         padding: 1rem;
         border: 1px solid rgba(0,0,0,0.05);
-    }
+    }}
     </style>
     """, unsafe_allow_html=True)
 # --- ENDE CSS-HACK ---
@@ -167,12 +167,12 @@ def show_hits(hits: List[Dict]):
             return
         data = []
         for i, hit in enumerate(hits):
-            data.append({
+            data.append({{
                 "Nr": i + 1,
-                "Score": f"{hit.get('rank_score', 0.0):.4f}",
+                "Score": f"{{hit.get('rank_score', 0.0):.4f}}",
                 "Filename": hit.get('filename', 'N/A'),
                 "Text": hit.get('text_content', hit.get('content', 'N/A'))[:500] + "..."
-            })
+            }})
         st.dataframe(data, use_container_width=True)
 
 
@@ -251,7 +251,7 @@ def keyword_search(query_terms: List[str], k: int = 10, require_term: str | None
 
 
 def combine_and_rank_chunks(hits: List[Dict], max_chunks: int) -> List[Dict]:
-    deduplicated: Dict[str, Dict] = {}
+    deduplicated: Dict[str, Dict] = {{}}
     sorted_hits = sorted(hits, key=lambda x: x.get('rank_score', 0.0), reverse=True)
     for hit in sorted_hits:
         key = hit['id'] 
@@ -265,11 +265,11 @@ def combine_and_rank_chunks(hits: List[Dict], max_chunks: int) -> List[Dict]:
 def pick_context(hits: List[Dict]) -> List[Dict]:
     blocks = []
     for hit in hits:
-        blocks.append({
+        blocks.append({{
             "filename": hit.get('filename', 'Unbekannt'),
             "score": hit.get('rank_score', 0.0),
             "content": hit.get('text_content', '')
-        })
+        }})
     return blocks
 
 
@@ -361,10 +361,10 @@ with st.sidebar:
     st.markdown(
         """
         **Über diesen Berater**\n
-        Dieses Tool wurde entwickelt von [DEIN NAME/DEINE FIRMA HIER].\n
+        Dieses Tool wurde von Thorsten Jankowski (ciferecigo) entwickelt.\n
         Wir helfen KMUs und dem Mittelstand, KI-Strategien erfolgreich umzusetzen.
         
-        [**Kostenloses Erstgespräch buchen**](httpsS://DEIN-CALENDLY-LINK.COM)
+        [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
         """
     )
     # --- ENDE HAKEN 1 ---
@@ -396,7 +396,7 @@ if selected_tab == "Allgemeiner Chat":
     if prompt := st.chat_input("Stellen Sie eine Frage an die Wissensdatenbank..."):
         
         st.chat_message("user").markdown(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state.messages.append({{"role": "user", "content": prompt}})
 
         ctx, q_clean, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
         
@@ -408,15 +408,15 @@ if selected_tab == "Allgemeiner Chat":
         if not ctx.strip():
             st.warning("Keine relevanten Kontext-Abschnitte gefunden.")
         
-        messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages_for_api = [{{"role": "system", "content": SYSTEM_PROMPT}}]
         messages_for_api.extend(st.session_state.messages) 
 
         if ctx.strip():
             last_user_message = messages_for_api.pop() 
-            messages_for_api.append({
+            messages_for_api.append({{
                 "role": "user",
                 "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
-            })
+            }})
 
         try:
             with st.spinner("KI-Assistent denkt nach..."):
@@ -428,7 +428,7 @@ if selected_tab == "Allgemeiner Chat":
                     answer = res['choices'][0]['message']['content']
             
             st.chat_message("assistant").markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            st.session_state.messages.append({{"role": "assistant", "content": answer}})
 
         except Exception as e:
             st.error(f"Fehler bei der OpenAI ChatCompletion API: {e}")
@@ -483,7 +483,7 @@ if selected_tab == "Strategie Berater":
                 "Geschäftsführung", "Vertrieb / Sales", "Marketing", "Kundenservice / Support", "HR / Personal",
                 "Buchhaltung / Finanzen / Controlling", "Produktion / F&E / Dienstleistungserbringung", "IT / Administration", "Logistik / Einkauf / SCM"
             ]
-            departments = st.multiselect("Welche Abteilungen sind im Fokus? (MehrfachausBahl)", departments_options)
+            departments = st.multiselect("Welche Abteilungen sind im Fokus? (Mehrfachausall)", departments_options)
 
             st.markdown("##### 3. Was ist Ihr Ziel?")
             
@@ -514,30 +514,30 @@ if selected_tab == "Strategie Berater":
                     
                     company_details = branche
                     if branche_freitext:
-                        company_details = f"{branche} (Spezialisierung: {branche_freitext})"
+                        company_details = f"{{branche}} (Spezialisierung: {{branche_freitext}})"
                     
                     all_goals = goals_preselected
                     if goals_freitext:
-                        all_goals.append(f"Weitere Details: {goals_freitext}")
+                        all_goals.append(f"Weitere Details: {{goals_freitext}}")
                     
                     all_data_sources = data_sources
                     if data_sources_freitext:
-                        all_data_sources.append(f"Weitere Details: {data_sources_freitext}")
+                        all_data_sources.append(f"Weitere Details: {{data_sources_freitext}}")
 
                     mega_prompt_content = f"""
                     Der Nutzer benötigt eine KI-Implementierungs-Roadmap und Best Practices.
                     Situation des Nutzers:
                     - Unternehmen / Branche: {company_details}
                     - Größe: {company_size}
-                    - Relevante Abteilungen: {', '.join(departments) if departments else 'Nicht spezifiziert'}
-                    - Vorhandene Datenquellen: {', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
-                    - Hauptziele: {', '.join(all_goals)}
+                    - Relevante Abteilungen: {{', '.join(departments) if departments else 'Nicht spezifiziert'}}
+                    - Vorhandene Datenquellen: {{', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}}
+                    - Hauptziele: {{', '.join(all_goals)}}
                     
                     Bitte finde die relevantesten Informationen zu Methoden, Roadmaps, Best Practices und Use Cases,
                     die auf diese spezifische Situation (insbesondere KMU, die genannte Branche und die Ziele) passen.
                     """
                     
-                    user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {', '.join(all_goals)}."
+                    user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {{', '.join(all_goals)}}."
                     
                     ctx, q_clean, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
 
@@ -550,16 +550,16 @@ if selected_tab == "Strategie Berater":
                         st.warning("Es wurden keine spezifischen Kontext-Abschnitte für diese Konfiguration gefunden. Die Antwort wird allgemeiner ausfallen.")
                     
                     messages_for_api = [
-                        {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\nKONTEXT:\n{ctx}"}
+                        {{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}},
+                        {{"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{{mega_prompt_content}}\n\nKONTEXT:\n{{ctx}}"}}
                     ]
                     
                     try:
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
                         
-                        st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
-                        st.session_state.berater_messages.append({"role": "assistant", "content": answer})
+                        st.session_state.berater_messages.append({{"role": "user", "content": user_message_display}})
+                        st.session_state.berater_messages.append({{"role": "assistant", "content": answer}})
                         
                         st.rerun()
 
@@ -582,7 +582,7 @@ if selected_tab == "Strategie Berater":
                         Eine automatisierte Analyse kann einen persönlichen Workshop nicht ersetzen. 
                         Wenn Sie diese Roadmap und Methoden konkret umsetzen möchten, lassen Sie uns sprechen.
                         
-                        [**Kostenloses Erstgespräch buchen**](httpsS://DEIN-CALENDLY-LINK.COM)
+                        [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
                         """
                     )
                     st.divider()
@@ -592,7 +592,7 @@ if selected_tab == "Strategie Berater":
         if prompt := st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie..."):
             
             st.chat_message("user").markdown(prompt)
-            st.session_state.berater_messages.append({"role": "user", "content": prompt})
+            st.session_state.berater_messages.append({{"role": "user", "content": prompt}})
 
             ctx, q_clean, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
             
@@ -604,15 +604,15 @@ if selected_tab == "Strategie Berater":
             if not ctx.strip():
                 st.warning("Keine relevanten Kontext-Abschnitte für diese Folgefrage gefunden.")
             
-            messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
+            messages_for_api = [{{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}}]
             messages_for_api.extend(st.session_state.berater_messages) 
 
             if ctx.strip():
                 last_user_message = messages_for_api.pop() 
-                messages_for_api.append({
+                messages_for_api.append({{
                     "role": "user",
                     "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
-                })
+                }})
             
             try:
                 with st.spinner("KI-Assistent denkt nach..."):
@@ -624,7 +624,7 @@ if selected_tab == "Strategie Berater":
                         answer = res['choices'][0]['message']['content']
                 
                 st.chat_message("assistant").markdown(answer)
-                st.session_state.berater_messages.append({"role": "assistant", "content": answer})
+                st.session_state.berater_messages.append({{"role": "assistant", "content": answer}})
                 st.rerun() 
 
             except Exception as e:
