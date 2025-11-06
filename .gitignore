@@ -1,0 +1,10 @@
+# Ignoriere alle .env-Dateien
+.env
+*.env
+
+# Ignoriere Python Cache-Dateien
+__pycache__/
+*.pyc
+
+# macOS Systemdateien
+.DS_Store
