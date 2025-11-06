@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 27: Kompatibel mit Brutalist config.toml)
+# Streamlit RAG (VERSION 27: Brutalist-Theme mit Momo Signature Font)
 from __future__ import annotations
 
 import os, re
@@ -104,11 +104,12 @@ st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
 # --- CSS-HACK (Minimal & Pragmatisch) ---
 st.markdown(f"""
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
     <style>
-    /* Die Schriftart wird jetzt von config.toml gesteuert */
-    
     /* Vergrößere den Hauptcontainer für mehr Platz */
     .main .block-container {{
         padding-top: 2rem;
@@ -116,7 +117,12 @@ st.markdown(f"""
         padding-left: 3rem;
         padding-right: 3rem;
     }}
-    /* Die Ränder werden jetzt von config.toml gesteuert */
+    /* Besseres Aussehen für die Chat-Nachrichten (mit kantigem Rand) */
+    .st-emotion-cache-4z1n4l {{ /* Chat-Nachrichten-Container */
+        border-radius: 0; /* Kantig (Brutalismus) */
+        padding: 1rem;
+        border: 1px solid #000000; /* Schwarzer Rahmen */
+    }}
     </style>
     """, unsafe_allow_html=True)
 # --- ENDE CSS-HACK ---
@@ -128,7 +134,8 @@ st.markdown(f"""
 @contextlib.contextmanager
 def connect_db():
     """ 
-    Verbindet sich mit der Supabase Postgres DB (via Pooler-String) und schließt die Verbindung sicher.
+    Verbindet sich mit der Supabase Postgres DB (via Pooler- oder Direct-String aus .env) 
+    und schließt die Verbindung sicher.
     """
     conn = None 
     try:
@@ -343,8 +350,7 @@ with st.sidebar:
     
     debug_hits = st.checkbox("Debug-Modus (Treffer anzeigen)", value=True)
     
-    # --- KORREKTUR: color='red' entfernt, icon='trash' wieder da ---
-    # Der Button nimmt jetzt die 'primaryColor' aus der config.toml
+    # sac.buttons (jetzt mit Icon und ohne rote Farbe)
     clicked_button = sac.buttons(
         items=[
             sac.ButtonsItem(label='Alle Verläufe löschen', icon='trash')
