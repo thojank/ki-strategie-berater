@@ -1,0 +1,44 @@
+[theme]
+# Basis-Theme
+base = "light"
+
+# KORREKTUR: Brutalismus = rohe, technische Schriftart
+font = "monospace"
+
+# Schrille Demo-Farben (Deine Auswahl - super!)
+primaryColor = "#FF00FF"           # Magenta - für Buttons und Highlights
+backgroundColor = "#FFFF00"        # Gelb - Hintergrund
+secondaryBackgroundColor = "#00FFFF"  # Cyan - für Widgets
+textColor = "#0000FF"              # Blau - Textfarbe
+
+# Link-Farben
+linkColor = "#FF0000"              # Rot - für Links
+
+# Code-Farben
+codeBackgroundColor = "#FF8800"    # Orange - Code-Hintergrund
+
+# Schriftgrößen
+baseFontSize = 16
+
+# KORREKTUR: Brutalismus = keine runden Ecken
+baseRadius = "none"
+
+# Border-Einstellungen
+borderColor = "#FF00FF"            # Magenta - Rahmen
+
+[theme.sidebar]
+# Sidebar mit anderen schrillen Farben (Deine Auswahl)
+backgroundColor = "#00FFFF"        # Cyan - Sidebar-Hintergrund
+secondaryBackgroundColor = "#FFFF00"  # Gelb - Sidebar-Widgets
+primaryColor = "#00FF00"           # Grün - Sidebar-Primary
+textColor = "#FF00FF"              # Magenta - Sidebar-Text
+borderColor = "#FF0000"            # Rot - Sidebar-Border
+
+[server]
+# Wichtig: Damit die App ohne Warnungen läuft
+headless = true
+port = 8501
+
+[browser]
+# Damit die App nicht automatisch den Browser öffnet (optional)
+gatherUsageStats = false

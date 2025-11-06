@@ -1,12 +1,12 @@
 # app.py
-# Streamlit RAG (VERSION 23: Neue Farbe + CTA-Button)
+# Streamlit RAG (VERSION 27: Kompatibel mit Brutalist config.toml)
 from __future__ import annotations
 
 import os, re
 from typing import Any, Dict, List, Tuple
 from decimal import Decimal
 import contextlib 
-# (Kein socket oder urllib.parse, da wir den Pooler-String in .env verwenden)
+# (socket und urllib.parse wurden entfernt)
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -91,33 +91,24 @@ Auch bei Folgefragen ("Erzähl mir mehr zu...") nutzt du den gesamten Gesprächs
 # Streamlit UI-Setup
 # ------------------------------------------------------------------------------
 
-# --- NEU: Primärfarbe der App ändern ---
-# Das ändert die Farbe von Buttons, Links, Slidern etc.
+# 'theme' wird jetzt aus .streamlit/config.toml geladen
 st.set_page_config(
     page_title="KI-Strategie Berater",
     page_icon="🤖", # Emoji funktioniert immer :)
     layout="wide",
-    initial_sidebar_state="expanded",
-    theme={
-        "primaryColor": "#00B9B9", # Ein "Teal" / "Cyan" Farbton
-        "backgroundColor": "#FFFFFF",
-        "secondaryBackgroundColor": "#F0F2F6",
-        "textColor": "#31333F",
-        "font": "sans serif",
-    }
+    initial_sidebar_state="expanded"
 )
-# --- ENDE NEU ---
 
-st.title("🤖 KI-Strategie Berater")
+st.title("KI-Strategie Berater") # st.title wird zu <h1>
 st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
 # --- CSS-HACK (Minimal & Pragmatisch) ---
 st.markdown(f"""
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
+
     <style>
-    /* Ändere die Hauptschriftart auf eine System-UI-Schriftart (wie Tailwind) */
-    html, body, [class*="st-"], .st-emotion-cache-1pxfknu, .st-emotion-cache-5rimss p {{
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    }}
+    /* Die Schriftart wird jetzt von config.toml gesteuert */
+    
     /* Vergrößere den Hauptcontainer für mehr Platz */
     .main .block-container {{
         padding-top: 2rem;
@@ -125,12 +116,7 @@ st.markdown(f"""
         padding-left: 3rem;
         padding-right: 3rem;
     }}
-    /* Besseres Aussehen für die Chat-Nachrichten */
-    .st-emotion-cache-4z1n4l {{ /* Chat-Nachrichten-Container */
-        border-radius: 0.5rem;
-        padding: 1rem;
-        border: 1px solid rgba(0,0,0,0.05);
-    }}
+    /* Die Ränder werden jetzt von config.toml gesteuert */
     </style>
     """, unsafe_allow_html=True)
 # --- ENDE CSS-HACK ---
@@ -357,10 +343,11 @@ with st.sidebar:
     
     debug_hits = st.checkbox("Debug-Modus (Treffer anzeigen)", value=True)
     
-    # sac.buttons (jetzt ohne 'icon' oder 'type')
+    # --- KORREKTUR: color='red' entfernt, icon='trash' wieder da ---
+    # Der Button nimmt jetzt die 'primaryColor' aus der config.toml
     clicked_button = sac.buttons(
         items=[
-            sac.ButtonsItem(label='Alle Verläufe löschen', color='red')
+            sac.ButtonsItem(label='Alle Verläufe löschen', icon='trash')
         ],
         format_func='title', 
         index=None 
@@ -392,11 +379,11 @@ if "berater_messages" not in st.session_state:
     st.session_state.berater_messages = []
 
 
-# --- sac.tabs (KORRIGIERT: ohne icons, mit neuer Farbe) ---
+# --- sac.tabs (KORRIGIERT: mit icons, ohne Farbe) ---
 selected_tab = sac.tabs([
-    sac.TabsItem(label='Strategie Berater'),
-    sac.TabsItem(label='Allgemeiner Chat'),
-], format_func='title', align='center', return_index=False, color="teal")
+    sac.TabsItem(label='Strategie Berater', icon='robot'),
+    sac.TabsItem(label='Allgemeiner Chat', icon='chat-dots'),
+], format_func='title', align='center', return_index=False) # color='' entfernt
 # --- ENDE sac.tabs ---
 
 
@@ -591,6 +578,7 @@ if selected_tab == "Strategie Berater":
                     st.divider()
                     st.markdown("**War diese Erstanalyse hilfreich?**")
                     st.markdown("Eine automatisierte Analyse kann einen persönlichen Workshop nicht ersetzen. Wenn Sie diese Roadmap und Methoden konkret umsetzen möchten, lassen Sie uns sprechen.")
+                    # st.link_button wird die neue Primärfarbe (aus config.toml) annehmen
                     st.link_button(
                         label="Kostenloses Erstgespräch buchen", 
                         url="https://calendar.app.google/kemaHAmTcqB2k5bE9",
