@@ -385,7 +385,7 @@ with st.sidebar:
     st.markdown(
         """
         **Über diesen Berater**\n
-        Dieses Tool wurde von Thorsten Jankowski (ciferecigo) entwickelt.\n
+        UPDATED....Dieses Tool wurde von Thorsten Jankowski (ciferecigo) entwickelt.\n
         Wir helfen KMUs und dem Mittelstand, KI-Strategien erfolgreich umzusetzen.
         
         [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
