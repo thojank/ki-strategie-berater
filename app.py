@@ -1,13 +1,12 @@
 # app.py
-# Streamlit RAG (VERSION 16: IPv4-Fix für DB-Verbindung)
+# Streamlit RAG (VERSION 22: Finaler Pooler-Fix)
 from __future__ import annotations
 
 import os, re
 from typing import Any, Dict, List, Tuple
 from decimal import Decimal
 import contextlib 
-import socket # <-- NEU HINZUGEFÜGT FÜR IPV4-FIX
-import urllib.parse # <-- NEU HINZUGEFÜGT FÜR IPV4-FIX
+# (socket und urllib.parse wurden entfernt)
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -130,42 +129,21 @@ st.markdown(f"""
 # ------------------------------------------------------------------------------
 @contextlib.contextmanager
 def connect_db():
+    """ 
+    Verbindet sich mit der Supabase Postgres DB (via Pooler-String) und schließt die Verbindung sicher.
     """
-    Stellt eine Verbindung zur DB her und erzwingt IPv4, um lokale Routing-Probleme zu umgehen.
-    """
-    conn = None
+    conn = None 
     try:
-        # 1. Parse die Verbindungs-URL
-        parsed_url = urllib.parse.urlparse(SUPABASE_PG_CONN)
-        
-        # 2. Extrahiere den Hostnamen
-        hostname = parsed_url.hostname
-        if not hostname:
-            raise ValueError("Hostname konnte nicht aus SUPABASE_PG_CONN extrahiert werden")
-
-        # 3. Erzwinge die Auflösung des Hostnamens zu einer IPv4-Adresse
-        # Dies ist der Fix für "Cannot assign requested address" bei fehlerhaftem IPv6-Routing
-        ipv4_address = socket.gethostbyname(hostname)
-
-        # 4. Baue die Verbindung manuell mit der IPv4-Adresse auf
-        conn = psycopg2.connect(
-            user=parsed_url.username,
-            password=parsed_url.password,
-            host=ipv4_address,  # <-- Der entscheidende Fix
-            port=parsed_url.port,
-            database=parsed_url.path[1:]  # Entferne das führende '/'
-        )
-        yield conn # Stellt die Verbindung dem 'with'-Block zur Verfügung
-    
+        conn = psycopg2.connect(SUPABASE_PG_CONN)
+        yield conn 
     except Exception as e:
         st.error(f"DB-Verbindungsfehler: {e}")
         if conn:
-            conn.close() # Versuch, die Verbindung zu schließen, falls sie existiert
+            conn.close() 
         st.stop()
     finally:
-        # Dieser Block wird *immer* ausgeführt, nachdem der 'with'-Block verlassen wird
         if conn:
-            conn.close() # Schließt die Verbindung sicher
+            conn.close() 
 
 
 @st.cache_data(show_spinner="[OpenAI] Erstelle Vektor-Embedding für Suchanfrage...")
@@ -191,12 +169,12 @@ def show_hits(hits: List[Dict]):
             return
         data = []
         for i, hit in enumerate(hits):
-            data.append({{
+            data.append({
                 "Nr": i + 1,
                 "Score": f"{{hit.get('rank_score', 0.0):.4f}}",
                 "Filename": hit.get('filename', 'N/A'),
                 "Text": hit.get('text_content', hit.get('content', 'N/A'))[:500] + "..."
-            }})
+            })
         st.dataframe(data, use_container_width=True)
 
 
@@ -275,7 +253,8 @@ def keyword_search(query_terms: List[str], k: int = 10, require_term: str | None
 
 
 def combine_and_rank_chunks(hits: List[Dict], max_chunks: int) -> List[Dict]:
-    deduplicated: Dict[str, Dict] = {{}}
+    deduplicated: Dict[str, Dict] = {} 
+    
     sorted_hits = sorted(hits, key=lambda x: x.get('rank_score', 0.0), reverse=True)
     for hit in sorted_hits:
         key = hit['id'] 
@@ -289,11 +268,11 @@ def combine_and_rank_chunks(hits: List[Dict], max_chunks: int) -> List[Dict]:
 def pick_context(hits: List[Dict]) -> List[Dict]:
     blocks = []
     for hit in hits:
-        blocks.append({{
+        blocks.append({
             "filename": hit.get('filename', 'Unbekannt'),
             "score": hit.get('rank_score', 0.0),
             "content": hit.get('text_content', '')
-        }})
+        })
     return blocks
 
 
@@ -385,7 +364,7 @@ with st.sidebar:
     st.markdown(
         """
         **Über diesen Berater**\n
-        UPDATED....Dieses Tool wurde von Thorsten Jankowski (ciferecigo) entwickelt.\n
+        Dieses Tool wurde von Thorsten Jankowski (ciferecigo) entwickelt.\n
         Wir helfen KMUs und dem Mittelstand, KI-Strategien erfolgreich umzusetzen.
         
         [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
@@ -420,7 +399,7 @@ if selected_tab == "Allgemeiner Chat":
     if prompt := st.chat_input("Stellen Sie eine Frage an die Wissensdatenbank..."):
         
         st.chat_message("user").markdown(prompt)
-        st.session_state.messages.append({{"role": "user", "content": prompt}})
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
         ctx, q_clean, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
         
@@ -432,15 +411,15 @@ if selected_tab == "Allgemeiner Chat":
         if not ctx.strip():
             st.warning("Keine relevanten Kontext-Abschnitte gefunden.")
         
-        messages_for_api = [{{"role": "system", "content": SYSTEM_PROMPT}}]
+        messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages_for_api.extend(st.session_state.messages) 
 
         if ctx.strip():
             last_user_message = messages_for_api.pop() 
-            messages_for_api.append({{
+            messages_for_api.append({
                 "role": "user",
                 "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
-            }})
+            })
 
         try:
             with st.spinner("KI-Assistent denkt nach..."):
@@ -452,7 +431,7 @@ if selected_tab == "Allgemeiner Chat":
                     answer = res['choices'][0]['message']['content']
             
             st.chat_message("assistant").markdown(answer)
-            st.session_state.messages.append({{"role": "assistant", "content": answer}})
+            st.session_state.messages.append({"role": "assistant", "content": answer})
 
         except Exception as e:
             st.error(f"Fehler bei der OpenAI ChatCompletion API: {e}")
@@ -507,7 +486,7 @@ if selected_tab == "Strategie Berater":
                 "Geschäftsführung", "Vertrieb / Sales", "Marketing", "Kundenservice / Support", "HR / Personal",
                 "Buchhaltung / Finanzen / Controlling", "Produktion / F&E / Dienstleistungserbringung", "IT / Administration", "Logistik / Einkauf / SCM"
             ]
-            departments = st.multiselect("Welche Abteilungen sind im Fokus? (Mehrfachausall)", departments_options)
+            departments = st.multiselect("Welche Abteilungen sind im Fokus? (Mehrfachauswahl)", departments_options)
 
             st.markdown("##### 3. Was ist Ihr Ziel?")
             
@@ -538,30 +517,30 @@ if selected_tab == "Strategie Berater":
                     
                     company_details = branche
                     if branche_freitext:
-                        company_details = f"{{branche}} (Spezialisierung: {{branche_freitext}})"
+                        company_details = f"{branche} (Spezialisierung: {branche_freitext})"
                     
                     all_goals = goals_preselected
                     if goals_freitext:
-                        all_goals.append(f"Weitere Details: {{goals_freitext}}")
+                        all_goals.append(f"Weitere Details: {goals_freitext}")
                     
                     all_data_sources = data_sources
                     if data_sources_freitext:
-                        all_data_sources.append(f"Weitere Details: {{data_sources_freitext}}")
+                        all_data_sources.append(f"Weitere Details: {data_sources_freitext}")
 
                     mega_prompt_content = f"""
                     Der Nutzer benötigt eine KI-Implementierungs-Roadmap und Best Practices.
                     Situation des Nutzers:
                     - Unternehmen / Branche: {company_details}
                     - Größe: {company_size}
-                    - Relevante Abteilungen: {{', '.join(departments) if departments else 'Nicht spezifiziert'}}
-                    - Vorhandene Datenquellen: {{', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}}
-                    - Hauptziele: {{', '.join(all_goals)}}
+                    - Relevante Abteilungen: {', '.join(departments) if departments else 'Nicht spezifiziert'}
+                    - Vorhandene Datenquellen: {', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
+                    - Hauptziele: {', '.join(all_goals)}
                     
                     Bitte finde die relevantesten Informationen zu Methoden, Roadmaps, Best Practices und Use Cases,
                     die auf diese spezifische Situation (insbesondere KMU, die genannte Branche und die Ziele) passen.
                     """
                     
-                    user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {{', '.join(all_goals)}}."
+                    user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {', '.join(all_goals)}."
                     
                     ctx, q_clean, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
 
@@ -574,16 +553,16 @@ if selected_tab == "Strategie Berater":
                         st.warning("Es wurden keine spezifischen Kontext-Abschnitte für diese Konfiguration gefunden. Die Antwort wird allgemeiner ausfallen.")
                     
                     messages_for_api = [
-                        {{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}},
-                        {{"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{{mega_prompt_content}}\n\nKONTEXT:\n{{ctx}}"}}
+                        {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT},
+                        {"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\nKONTEXT:\n{ctx}"}
                     ]
                     
                     try:
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
                         
-                        st.session_state.berater_messages.append({{"role": "user", "content": user_message_display}})
-                        st.session_state.berater_messages.append({{"role": "assistant", "content": answer}})
+                        st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
+                        st.session_state.berater_messages.append({"role": "assistant", "content": answer})
                         
                         st.rerun()
 
@@ -616,7 +595,7 @@ if selected_tab == "Strategie Berater":
         if prompt := st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie..."):
             
             st.chat_message("user").markdown(prompt)
-            st.session_state.berater_messages.append({{"role": "user", "content": prompt}})
+            st.session_state.berater_messages.append({"role": "user", "content": prompt})
 
             ctx, q_clean, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
             
@@ -628,15 +607,15 @@ if selected_tab == "Strategie Berater":
             if not ctx.strip():
                 st.warning("Keine relevanten Kontext-Abschnitte für diese Folgefrage gefunden.")
             
-            messages_for_api = [{{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}}]
+            messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
             messages_for_api.extend(st.session_state.berater_messages) 
 
             if ctx.strip():
                 last_user_message = messages_for_api.pop() 
-                messages_for_api.append({{
+                messages_for_api.append({
                     "role": "user",
                     "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
-                }})
+                })
             
             try:
                 with st.spinner("KI-Assistent denkt nach..."):
@@ -644,11 +623,13 @@ if selected_tab == "Strategie Berater":
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
                     else:
+                        # --- KORREKTUR: 0.True zu 0.1 ---
                         res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
+                        # --- ENDE KORREKTUR ---
                         answer = res['choices'][0]['message']['content']
                 
                 st.chat_message("assistant").markdown(answer)
-                st.session_state.berater_messages.append({{"role": "assistant", "content": answer}})
+                st.session_state.berater_messages.append({"role": "assistant", "content": answer})
                 st.rerun() 
 
             except Exception as e:
