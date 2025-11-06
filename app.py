@@ -1,12 +1,12 @@
 # app.py
-# Streamlit RAG (VERSION 22: Finaler Pooler-Fix)
+# Streamlit RAG (VERSION 23: Neue Farbe + CTA-Button)
 from __future__ import annotations
 
 import os, re
 from typing import Any, Dict, List, Tuple
 from decimal import Decimal
 import contextlib 
-# (socket und urllib.parse wurden entfernt)
+# (Kein socket oder urllib.parse, da wir den Pooler-String in .env verwenden)
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -90,12 +90,24 @@ Auch bei Folgefragen ("Erzähl mir mehr zu...") nutzt du den gesamten Gesprächs
 # ------------------------------------------------------------------------------
 # Streamlit UI-Setup
 # ------------------------------------------------------------------------------
+
+# --- NEU: Primärfarbe der App ändern ---
+# Das ändert die Farbe von Buttons, Links, Slidern etc.
 st.set_page_config(
     page_title="KI-Strategie Berater",
     page_icon="🤖", # Emoji funktioniert immer :)
     layout="wide",
     initial_sidebar_state="expanded",
+    theme={
+        "primaryColor": "#00B9B9", # Ein "Teal" / "Cyan" Farbton
+        "backgroundColor": "#FFFFFF",
+        "secondaryBackgroundColor": "#F0F2F6",
+        "textColor": "#31333F",
+        "font": "sans serif",
+    }
 )
+# --- ENDE NEU ---
+
 st.title("🤖 KI-Strategie Berater")
 st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
@@ -380,11 +392,11 @@ if "berater_messages" not in st.session_state:
     st.session_state.berater_messages = []
 
 
-# --- sac.tabs (KORRIGIERT: ohne icons) ---
+# --- sac.tabs (KORRIGIERT: ohne icons, mit neuer Farbe) ---
 selected_tab = sac.tabs([
     sac.TabsItem(label='Strategie Berater'),
     sac.TabsItem(label='Allgemeiner Chat'),
-], format_func='title', align='center', return_index=False)
+], format_func='title', align='center', return_index=False, color="teal")
 # --- ENDE sac.tabs ---
 
 
@@ -503,10 +515,8 @@ if selected_tab == "Strategie Berater":
             goals_freitext = st.text_area("Weitere Ziele oder Details:", 
                                           placeholder="z.B. Automatisierung der Rechnungsprüfung, Analyse von Support-Tickets zur Produktverbesserung...")
 
-            # KORREKTUR: st.form_submit_button (Muss für Forms sein)
             st.markdown("---") # Visuelle Trennung
             submit_button = st.form_submit_button("Strategie-Empfehlung generieren", use_container_width=True)
-            # ENDE KORREKTUR
 
         # --- Logik nach dem Absenden des Formulars ---
         if submit_button:
@@ -576,17 +586,15 @@ if selected_tab == "Strategie Berater":
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
                 
-                # --- AKQUISE-HAKEN 2: POST-ANTWORT (Aktiv) ---
+                # --- AKQUISE-HAKEN 2: KORREKTUR zu st.link_button ---
                 if message["role"] == "assistant" and i == 1: # i==1 ist die erste Antwort (nach der User-Formular-Message)
                     st.divider()
-                    st.markdown(
-                        """
-                        **War diese Erstanalyse hilfreich?**\n
-                        Eine automatisierte Analyse kann einen persönlichen Workshop nicht ersetzen. 
-                        Wenn Sie diese Roadmap und Methoden konkret umsetzen möchten, lassen Sie uns sprechen.
-                        
-                        [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
-                        """
+                    st.markdown("**War diese Erstanalyse hilfreich?**")
+                    st.markdown("Eine automatisierte Analyse kann einen persönlichen Workshop nicht ersetzen. Wenn Sie diese Roadmap und Methoden konkret umsetzen möchten, lassen Sie uns sprechen.")
+                    st.link_button(
+                        label="Kostenloses Erstgespräch buchen", 
+                        url="https://calendar.app.google/kemaHAmTcqB2k5bE9",
+                        use_container_width=True
                     )
                     st.divider()
                 # --- ENDE HAKEN 2 ---
@@ -623,9 +631,7 @@ if selected_tab == "Strategie Berater":
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
                     else:
-                        # --- KORREKTUR: 0.True zu 0.1 ---
                         res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
-                        # --- ENDE KORREKTUR ---
                         answer = res['choices'][0]['message']['content']
                 
                 st.chat_message("assistant").markdown(answer)
