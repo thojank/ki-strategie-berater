@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 14: Fix für Icons, anderer CDN)
+# Streamlit RAG (VERSION 15: Icons entfernt für stabiles Deployment)
 from __future__ import annotations
 
 import os, re
@@ -91,7 +91,7 @@ Auch bei Folgefragen ("Erzähl mir mehr zu...") nutzt du den gesamten Gesprächs
 # ------------------------------------------------------------------------------
 st.set_page_config(
     page_title="KI-Strategie Berater",
-    page_icon="🤖",
+    page_icon="🤖", # Emoji funktioniert immer :)
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -100,8 +100,6 @@ st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
 # --- CSS-HACK (Minimal & Pragmatisch) ---
 st.markdown(f"""
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
-
     <style>
     /* Ändere die Hauptschriftart auf eine System-UI-Schriftart (wie Tailwind) */
     html, body, [class*="st-"], .st-emotion-cache-1pxfknu, .st-emotion-cache-5rimss p {{
@@ -342,10 +340,10 @@ with st.sidebar:
     
     debug_hits = st.checkbox("Debug-Modus (Treffer anzeigen)", value=True)
     
-    # sac.buttons (ohne 'type'-Argument)
+    # KORREKTUR: sac.buttons (jetzt ohne 'icon')
     clicked_button = sac.buttons(
         items=[
-            sac.ButtonsItem(label='Alle Verläufe löschen', icon='trash', color='red')
+            sac.ButtonsItem(label='Alle Verläufe löschen', color='red')
         ],
         format_func='title', 
         index=None 
@@ -377,10 +375,10 @@ if "berater_messages" not in st.session_state:
     st.session_state.berater_messages = []
 
 
-# --- sac.tabs (Das funktioniert und bleibt) ---
+# --- sac.tabs (KORRIGIERT: ohne icons) ---
 selected_tab = sac.tabs([
-    sac.TabsItem(label='Strategie Berater', icon='robot'),
-    sac.TabsItem(label='Allgemeiner Chat', icon='chat-dots'),
+    sac.TabsItem(label='Strategie Berater'),
+    sac.TabsItem(label='Allgemeiner Chat'),
 ], format_func='title', align='center', return_index=False)
 # --- ENDE sac.tabs ---
 
