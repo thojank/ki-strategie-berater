@@ -1,17 +1,19 @@
 # app.py
-# Streamlit RAG (VERSION 15: Icons entfernt für stabiles Deployment)
+# Streamlit RAG (VERSION 16: IPv4-Fix für DB-Verbindung)
 from __future__ import annotations
 
 import os, re
 from typing import Any, Dict, List, Tuple
 from decimal import Decimal
 import contextlib 
+import socket # <-- NEU HINZUGEFÜGT FÜR IPV4-FIX
+import urllib.parse # <-- NEU HINZUGEFÜGT FÜR IPV4-FIX
 
 import streamlit as st
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import streamlit_antd_components as sac # <-- Das bleibt (für Tabs und Buttons)
+import streamlit_antd_components as sac 
 
 # OpenAI SDK (>=1.x/2.x)
 try:
@@ -128,18 +130,42 @@ st.markdown(f"""
 # ------------------------------------------------------------------------------
 @contextlib.contextmanager
 def connect_db():
+    """
+    Stellt eine Verbindung zur DB her und erzwingt IPv4, um lokale Routing-Probleme zu umgehen.
+    """
     conn = None
     try:
-        conn = psycopg2.connect(SUPABASE_PG_CONN)
-        yield conn
+        # 1. Parse die Verbindungs-URL
+        parsed_url = urllib.parse.urlparse(SUPABASE_PG_CONN)
+        
+        # 2. Extrahiere den Hostnamen
+        hostname = parsed_url.hostname
+        if not hostname:
+            raise ValueError("Hostname konnte nicht aus SUPABASE_PG_CONN extrahiert werden")
+
+        # 3. Erzwinge die Auflösung des Hostnamens zu einer IPv4-Adresse
+        # Dies ist der Fix für "Cannot assign requested address" bei fehlerhaftem IPv6-Routing
+        ipv4_address = socket.gethostbyname(hostname)
+
+        # 4. Baue die Verbindung manuell mit der IPv4-Adresse auf
+        conn = psycopg2.connect(
+            user=parsed_url.username,
+            password=parsed_url.password,
+            host=ipv4_address,  # <-- Der entscheidende Fix
+            port=parsed_url.port,
+            database=parsed_url.path[1:]  # Entferne das führende '/'
+        )
+        yield conn # Stellt die Verbindung dem 'with'-Block zur Verfügung
+    
     except Exception as e:
         st.error(f"DB-Verbindungsfehler: {e}")
         if conn:
-            conn.close()
+            conn.close() # Versuch, die Verbindung zu schließen, falls sie existiert
         st.stop()
     finally:
+        # Dieser Block wird *immer* ausgeführt, nachdem der 'with'-Block verlassen wird
         if conn:
-            conn.close()
+            conn.close() # Schließt die Verbindung sicher
 
 
 @st.cache_data(show_spinner="[OpenAI] Erstelle Vektor-Embedding für Suchanfrage...")
@@ -340,7 +366,7 @@ with st.sidebar:
     
     debug_hits = st.checkbox("Debug-Modus (Treffer anzeigen)", value=True)
     
-    # KORREKTUR: sac.buttons (jetzt ohne 'icon')
+    # sac.buttons (jetzt ohne 'icon' oder 'type')
     clicked_button = sac.buttons(
         items=[
             sac.ButtonsItem(label='Alle Verläufe löschen', color='red')
