@@ -1,7 +1,7 @@
 [theme]
 # Basis-Theme
 base = "light"
-font = "Arimo:https://fonts.googleapis.com/css2?family=Arimo&display=swap"
+font = "'Scope One':https://fonts.googleapis.com/css2?family=Scope+One&display=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
 # --- Distinguiertes Farbschema (Mauve/Beige) ---
