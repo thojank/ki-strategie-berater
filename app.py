@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.9: Klickbare Themen-Buttons)
+# Streamlit RAG (VERSION 32.0: Klick-Button State-Logic-Fix)
 from __future__ import annotations
 
 import os, re, json
@@ -609,6 +609,9 @@ if "berater_messages" not in st.session_state:
 # --- NEU: Initialisierung für verwandte Themen ---
 if "related_topics" not in st.session_state:
     st.session_state.related_topics = []
+# --- NEU: Initialisierung für klickbare Themen ---
+if "topics_to_display" not in st.session_state:
+    st.session_state.topics_to_display = []
 
 
 # --- sac.tabs (Linksbündig + FARBIG) ---
@@ -856,6 +859,7 @@ if selected_tab == "Strategie Berater":
                         st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
                         st.session_state.berater_messages.append({"role": "assistant", "content": answer})
                         
+                        # --- NEU: Verwandte Themen im Session State speichern ---
                         st.session_state.related_topics = related_topics
                         
                         st.rerun()
@@ -882,40 +886,40 @@ if selected_tab == "Strategie Berater":
                     )
                     st.divider()
         
-        # --- NEU: Verwandte Themen als klickbare Buttons ---
+        
+        # --- KORRIGIERTE LOGIK FÜR KLICKBARE BUTTONS ---
         clicked_topic = None
+        
+        # 1. Wenn die RAG-Pipeline neue Themen geliefert hat, speichere sie für die Anzeige.
         if st.session_state.related_topics:
+            st.session_state.topics_to_display = st.session_state.related_topics[:]
+            st.session_state.related_topics = [] # Leere die "neue" Liste
+
+        # 2. Zeige die Buttons an, WENN es welche zum Anzeigen gibt
+        if st.session_state.topics_to_display:
             with st.chat_message("assistant", avatar="🤖"):
                 st.markdown("**Themen, in denen Ihre Problematik ebenfalls angesprochen wird (Best Practices):**")
                 st.markdown("Klicken Sie auf ein Thema, um mehr zu erfahren:")
                 
-                # Kopie der Themen für die Buttons erstellen
-                topics_to_display = st.session_state.related_topics[:]
-                
-                # Den State *vor* dem Anzeigen der Buttons leeren
-                st.session_state.related_topics = [] 
-                
-                # --- KORREKTUR: 'format_func' entfernt ---
                 clicked_topic = sac.buttons(
-                    items=[sac.ButtonsItem(label=t) for t in topics_to_display],
-                    # format_func='label', <-- DIESE ZEILE WURDE ENTFERNT
+                    items=[sac.ButtonsItem(label=t) for t in st.session_state.topics_to_display],
                     variant='outline', 
                     size='small',
                     color='gray',
                     index=None,
                     return_index=False 
                 )
-
-        # --- KORRIGIERTE LOGIK: Kombiniertes Input-Handling ---
+        
+        # 3. Handle Input (entweder Klick oder Eingabe)
         prompt_input = st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie...")
         
-        # Priorisiere den Button-Klick. Wenn geklickt, wird die Texteingabe ignoriert.
         if clicked_topic:
             prompt = clicked_topic
+            st.session_state.topics_to_display = [] # Buttons nach Klick leeren
         else:
             prompt = prompt_input
         
-        # Führe die Logik nur aus, wenn ein Prompt vorhanden ist (entweder Klick oder Tippen)
+        # 4. Führe die Logik nur aus, wenn ein Prompt vorhanden ist
         if prompt: 
             
             st.chat_message("user").markdown(prompt)
@@ -930,7 +934,7 @@ if selected_tab == "Strategie Berater":
                     st.code(ctx)
             
             if not ctx.strip():
-                st.warning("Keine relevanten Kontext-Abschnitte für diese Folgefrage gefunden.")
+                st.warning("Keine relevanten Kontext-Abschnitte gefunden.")
             
             messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
             messages_for_api.extend(st.session_state.berater_messages) 
