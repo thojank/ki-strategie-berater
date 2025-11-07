@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.5: Branding-Update)
+# Streamlit RAG (VERSION 31.6: Branding + Formular-Logik-Fix)
 from __future__ import annotations
 
 import os, re, json
@@ -56,7 +56,7 @@ DEINE WICHTIGSTE REGEL: Du darfst unter KEINEN UMSTÄNDEN Wissen außerhalb des 
 - Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden." Es gibt keine Ausnahmen.
 - Wenn KONTEXT vorhanden ist: Beantworte die Frage des Nutzers präzise und ausschließlich auf Basis dieses KONTEXTS.
 - Antworte auf Deutsch.
-- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, falls der Kontext genutzt wurde.
+- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, die du verwendet hast, falls der Kontext genutzt wurde.
 - Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich (dies ist die EINZIGE Ausnahme, bei der du ohne Kontext antworten darfst).
 - ERINNERUNG: Wenn die Frage spezifisch ist und der KONTEXT leer ist, lautet die ANTWORT IMMER: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
 """)
@@ -726,7 +726,7 @@ if selected_tab == "Strategie Berater":
                 "Buchhaltung / Finanzen / Controlling", "Produktion / F&E / Dienstleistungserbringung", "IT / Administration", "Logistik / Einkauf / SCM"
             ]
             
-            st.markdown("Welche Abteilungen sind im Fokus? (MehrfachausLahl)")
+            st.markdown("Welche Abteilungen sind im Fokus? (Mehrfachauswahl)")
             departments = st.multiselect(
                 "departments_hidden_label", 
                 departments_options,
@@ -760,7 +760,7 @@ if selected_tab == "Strategie Berater":
             st.markdown("---") 
             submit_button = st.form_submit_button("Strategie-Empfehlung generieren", use_container_width=True)
 
-        # --- Logik nach dem Absenden des Formulars ---
+        # --- KORRIGIERTER BLOCK: Logik nach dem Absenden des Formulars ---
         if submit_button:
             if (branche == "(Bitte auswählen)" and not branche_freitext) or (not goals_preselected and not goals_freitext):
                 st.error("Bitte füllen Sie zumindest 'Branche' und 'Ziele' aus, um eine Empfehlung zu erhalten.")
@@ -794,8 +794,45 @@ if selected_tab == "Strategie Berater":
                     
                     user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {', '.join(all_goals)}."
                     
-                    # --- ÄNDERUNG: 'related_topics' wird empfangen ---
-                    ctx, ranked_chunks, related_topics = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
+                    # --- KORRIGIERTE HYBRID-SUCHE (ersetzt run_rag_pipeline) ---
+                    
+                    # 1. Graph-Suche (mit SPEZIFISCHEN Formular-Entitäten)
+                    manual_entities = [branche, company_size] + departments + all_goals
+                    # Bereinigen (z.B. "(Bitte auswählen)" entfernen)
+                    manual_entities = [e for e in manual_entities if e and "(Bitte auswählen)" not in e]
+                    
+                    with st.sidebar.expander("Entitäts-Extraktion (Graph-Debug)", expanded=True):
+                         st.write("**Formular-Eingaben (Manuelle Entitäten):**", manual_entities)
+                    
+                    graph_chunk_ids = query_graph_for_chunks(manual_entities)
+                    related_topics = get_related_topics_from_graph(manual_entities)
+
+                    # 2. Vektor-Suche (mit dem ALLGEMEINEN Mega-Prompt)
+                    query_embedding = get_embedding(mega_prompt_content, model=embed_model)
+                    vec_hits = match_documents(query_embedding, match_threshold=threshold, match_count=k)
+                    
+                    # 3. Keyword-Suche (mit dem ALLGEMEINEN Mega-Prompt)
+                    q_clean, terms, must = parse_query(mega_prompt_content)
+                    kw_hits = keyword_search(terms, k=k, require_term=must if must else None) 
+
+                    # 4. Graph-Treffer holen
+                    graph_hits = []
+                    if graph_chunk_ids:
+                        with connect_db() as conn:
+                            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                                sql = f"""
+                                SELECT {CHUNK_ID_COL}::text as id, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content
+                                FROM {KB_TABLE}
+                                WHERE {CHUNK_ID_COL}::text = ANY(%s); 
+                                """
+                                cur.execute(sql, (graph_chunk_ids,))
+                                graph_hits = cur.fetchall()
+                    
+                    # 5. Ranken & Kontexten
+                    ranked_chunks = combine_and_rank_chunks(vec_hits, kw_hits, graph_hits, max_chunks=max_chunks)
+                    ctx = ctx_to_text(ranked_chunks)
+                    # --- ENDE KORRIGIERTE SUCHE ---
+
 
                     if debug_hits:
                         show_hits(ranked_chunks)
@@ -817,7 +854,6 @@ if selected_tab == "Strategie Berater":
                         st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
                         st.session_state.berater_messages.append({"role": "assistant", "content": answer})
                         
-                        # --- NEU: Verwandte Themen im Session State speichern ---
                         st.session_state.related_topics = related_topics
                         
                         st.rerun()
