@@ -1,7 +1,7 @@
 [theme]
 # Basis-Theme
 base = "light"
-font = "Nunito:https://fonts.googleapis.com/css2?family=Nunito&display=swap"
+font = "Nunito:https://fonts.googleapis.com/css2?family=Crimson+Pro=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
 # --- Distinguiertes Farbschema (Mauve/Beige) ---
