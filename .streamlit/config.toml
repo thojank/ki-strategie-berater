@@ -6,41 +6,41 @@ base = "light"
 font = "'Scope One':https://fonts.googleapis.com/css2?family=Scope+One&display=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
-# --- Klares Schema mit Gelb-Akzent ---
+# --- Kräftiges Schema (Gelb/Rot) ---
 
-# Primärfarbe (Ihr sattes Gelb für "Schwung")
-primaryColor = "#f6c850"
+# Primärfarbe (Ihr Rot für Buttons und Highlights)
+primaryColor = "#ea3323"
 
-# Hintergrundfarben (Sehr klar)
-backgroundColor = "#FFFFFF"           # Reinweiß für maximalen Kontrast
-secondaryBackgroundColor = "#F0F2F6"  # Sehr helles, klares Grau (für Widgets)
+# Hintergrundfarben (Ihr Gelb als Basis)
+backgroundColor = "#f6c850"
+secondaryBackgroundColor = "#FFFFFF"  # Widgets (z.B. Slider) sind Weiß für Kontrast
 
-# Textfarbe (Sehr klar)
-textColor = "#222222"                 # Sehr dunkles Grau (fast schwarz)
+# Textfarbe (Sehr dunkel für Lesbarkeit auf Gelb)
+textColor = "#222222"
 
-# Link-Farbe (Nutzt das Gelb, aber dunkler für Lesbarkeit)
-linkColor = "#D4A01A" # Abgedunkeltes Gelb für Kontrast
+# Link-Farbe (Ein dunkleres Rot, um sich von Buttons abzuheben)
+linkColor = "#C02B1D"
 
-# Code-Hintergrund (Klar und neutral)
-codeBackgroundColor = "#F5F5F5"
+# Code-Hintergrund (Weiß für saubere Codeblöcke)
+codeBackgroundColor = "#FFFFFF"
 
 # Schriftgröße
 baseFontSize = 16
 
-# Ecken (Leicht abgerundet bleibt "sauber")
+# Ecken
 baseRadius = "0.25rem"
 
-# Border-Einstellungen (Subtil und klar)
-borderColor = "#DDDDDD"
+# Border-Einstellungen (Neutrales Grau)
+borderColor = "#D1D1D1"
 
 
 [theme.sidebar]
-# Sidebar (hell und klar, um nicht abzulenken)
-backgroundColor = "#FAFAFA"           # Sehr helles Grau (fast weiß)
-secondaryBackgroundColor = "#FFFFFF"   # Widgets in der Sidebar (weiß)
-primaryColor = "#f6c850"             # Gelb für Akzente
+# Sidebar (Klar und Weiß, als Kontrast zum Gelb)
+backgroundColor = "#FFFFFF"           # Weißer Hintergrund
+secondaryBackgroundColor = "#F0F2F6"   # Hellgraue Widgets in der Sidebar
+primaryColor = "#ea3323"             # Roter Akzent (konsistent)
 textColor = "#222222"                 # Dunkler Text
-borderColor = "#DDDDDD"            # Subtile Trennlinie
+borderColor = "#D1D1D1"            # Subtile Trennlinie
 
 [server]
 # Wichtig: Damit die App ohne Warnungen läuft
