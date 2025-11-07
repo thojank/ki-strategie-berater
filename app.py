@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 32.3: Nativer st.tabs Wechsel & finale CSS-Fixes)
+# Streamlit RAG (VERSION 32.4: SyntaxError-Fix)
 from __future__ import annotations
 
 import os, re, json
@@ -656,6 +656,7 @@ with tab_chat:
                     res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                     answer = res.choices[0].message.content
                 else:
+                    # --- HIER WAR DER SYNTAXFEHLER ---
                     res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                     answer = res['choices'][0]['message']['content']
             
@@ -933,7 +934,7 @@ with tab_berater:
                     st.code(ctx)
             
             if not ctx.strip():
-                st.warning("Keine relevanten Kontext-Abschnitte gefunden.")
+                st.warning("Keine relevanten Kontext-Abschnitte für diese Folgefrage gefunden.")
             
             messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
             messages_for_api.extend(st.session_state.berater_messages) 
@@ -958,8 +959,9 @@ with tab_berater:
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
                     else:
+                        # --- HIER WAR DER SYNTAXFEHLER ---
                         res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
-                        answer = res['choices[0]['message']['content']
+                        answer = res['choices'][0]['message']['content']
                 
                 st.chat_message("assistant").markdown(answer)
                 st.session_state.berater_messages.append({"role": "assistant", "content": answer})
