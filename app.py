@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.4: HYBRID GRAPH RAG + Layout-Update)
+# Streamlit RAG (VERSION 31.5: Branding-Update)
 from __future__ import annotations
 
 import os, re, json
@@ -105,12 +105,12 @@ st.set_page_config(
 )
 
 st.title("KI-Strategie Berater") 
-# HINWEIS: Logo wird jetzt in der Sidebar gesetzt (siehe Zeile 618)
+# HINWEIS: Logo wird jetzt in der Sidebar gesetzt
 
 # --- CSS-HACK (Layout-Änderungen) ---
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
-
+    
     <style>
     /* 1. Main Content Area (hellgrau & abgesetzt) */
     .main .block-container {{
@@ -119,7 +119,6 @@ st.markdown(f"""
         padding-left: 3rem;
         padding-right: 3rem;
     }}
-    /* Ziel auf den Hauptcontainer, nicht die Sidebar */
     div[data-testid="stVerticalBlock"] > div:not([data-testid="stSidebar"]) > div.block-container {{
          background-color: #FAFAFA; /* Hellgrau */
          border-left: 1px solid #DDDDDD; /* Trennlinie */
@@ -149,11 +148,13 @@ st.markdown(f"""
         padding-left: 0.5rem; 
     }}
     
-    /* 4. Tab-Styling (unverändert) */
+    /* 4. Tab-Styling (JETZT MIT NEUER SCHRIFTART) */
     .sac-tabs-bar {{
         border-bottom: 2px solid #DDDDDD !important; 
     }}
     .sac-tabs-item {{
+        font-family: 'Lexend Exa', sans-serif !important; /* NEUE SCHRIFTART */
+        font-weight: 700 !important;
         background-color: #EAEAEA !important; 
         border-radius: 0.25rem 0.25rem 0 0 !important; 
         margin-bottom: -2px !important; 
@@ -161,13 +162,13 @@ st.markdown(f"""
         border-bottom: none !important;
     }}
     
-    /* 5. Aktiver Tab (JETZT FARBIG) */
+    /* 5. Aktiver Tab (Farbe wird jetzt über Python gesteuert) */
     .sac-tabs-item-active {{
-        background-color: #ea3323 !important; /* Rote Farbe (primaryColor) */
-        color: #FFFFFF !important; /* Weiße Schrift */
+        font-family: 'Lexend Exa', sans-serif !important; /* NEUE SCHRIFTART */
+        font-weight: 700 !important;
+        color: #FFFFFF !important; /* Weiße Schrift (Kontrast zu Rot) */
         border: 2px solid #ea3323 !important;  
-        border-bottom: 2px solid #FAFAFA !important; /* "Schneidet" die Linie mit der neuen Main-BG-Farbe */
-        font-weight: bold;
+        border-bottom: 2px solid #FAFAFA !important; /* Schneidet Linie mit BG-Farbe */
     }}
 
     /* 6. Suchschlitz-Rand (KORRIGIERT FÜR FOKUS-FORM) */
@@ -176,20 +177,15 @@ st.markdown(f"""
         border-radius: 0.5rem !important; /* Runde Ecken */
         background-color: #FFFFFF;
     }}
-
-    /* Entfernt den inneren Rand, um Dopplungen zu vermeiden */
     div[data-testid="stChatInput"] div[data-baseweb="input"] {{
          border: none !important;
          box-shadow: none !important;
          background-color: transparent !important;
     }}
-
-    /* Roter "Glow" (auf dem äußeren Container) */
     div[data-testid="stChatInput"]:focus-within {{
         border-color: #ea3323 !important;
         box-shadow: 0 0 0 2px #ea332333 !important; /* Heller roter Schatten */
     }}
-    /* Stellt sicher, dass der innere Input keinen eigenen blauen Glow bekommt */
     div[data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
         box-shadow: none !important;
     }}
@@ -544,21 +540,25 @@ with st.sidebar:
     st.sidebar.image("ciferecigo.png", width=67) # 1/3 von 200px
     
     # 2. Über uns Text & Button
-    st.markdown("**Der KI Berater**")
+    # KORREKTUR: st.subheader() wendet 'headingFont' an
+    st.subheader("Der KI Berater") 
     st.markdown(
         """
         Dieses Tool wurde von Thorsten Jankowski / ciferecigo entwickelt.
         Wir helfen KMUs und dem Mittelstand, KI-Strategien erfolgreich umzusetzen.
         """
     )
+    # KORREKTUR: type="primary" hinzugefügt, um den Button rot zu machen
     st.link_button(
         "Kostenloses Erstgespräch buchen", 
         "https://calendar.app.google/kemaHAmTcqB2k5bE9",
-        use_container_width=True
+        use_container_width=True,
+        type="primary"
     )
     st.divider()
 
     # 3. Modell-Einstellungen
+    # st.subheader() wendet 'headingFont' an
     st.subheader("Modell-Einstellungen")
     chat_model = st.text_input("Chat-Modell", DEFAULT_CHAT_MODEL)
     embed_model = st.text_input("Embedding-Modell", DEFAULT_EMBED_MODEL)
@@ -581,6 +581,7 @@ with st.sidebar:
     st.divider()
 
     # 5. Such-Einstellungen
+    # st.subheader() wendet 'headingFont' an
     st.subheader("Such-Einstellungen")
     threshold = st.slider(
         "Ähnlichkeits-Threshold (Vektor)", 
@@ -610,11 +611,11 @@ if "related_topics" not in st.session_state:
     st.session_state.related_topics = []
 
 
-# --- sac.tabs (Linksbündig) ---
+# --- sac.tabs (Linksbündig + FARBIG) ---
 selected_tab = sac.tabs([
     sac.TabsItem(label='Strategie Berater', icon='robot'),
     sac.TabsItem(label='Allgemeiner Chat', icon='chat-dots'),
-], format_func='title', align='left', return_index=False) 
+], format_func='title', align='left', return_index=False, color="#ea3323") # Rote Farbe hier
 # --- ENDE sac.tabs ---
 
 
@@ -669,6 +670,7 @@ if selected_tab == "Allgemeiner Chat":
 
 # --- TAB 2: Strategie Berater ---
 if selected_tab == "Strategie Berater":
+    # st.subheader() wendet 'headingFont' an
     st.subheader("Ihr KI-Strategie Berater")
     
     # FALL 1: Das Gespräch hat noch nicht begonnen -> Zeige Formular
@@ -724,7 +726,7 @@ if selected_tab == "Strategie Berater":
                 "Buchhaltung / Finanzen / Controlling", "Produktion / F&E / Dienstleistungserbringung", "IT / Administration", "Logistik / Einkauf / SCM"
             ]
             
-            st.markdown("Welche Abteilungen sind im Fokus? (Mehrfachauswahl)")
+            st.markdown("Welche Abteilungen sind im Fokus? (MehrfachausLahl)")
             departments = st.multiselect(
                 "departments_hidden_label", 
                 departments_options,

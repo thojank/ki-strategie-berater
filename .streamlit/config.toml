@@ -2,8 +2,9 @@
 # Basis-Theme
 base = "light"
 
-# Schriften (wie von Ihnen zuletzt bereitgestellt)
+# Schriften
 font = "'Scope One':https://fonts.googleapis.com/css2?family=Scope+One&display=swap"
+headingFont = "'Lexend Exa':https://fonts.googleapis.com/css2?family=Lexend+Exa:wght@700&display=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
 # --- Kräftiges Schema (Gelb/Rot) ---
