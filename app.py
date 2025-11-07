@@ -690,7 +690,9 @@ if selected_tab == "Strategie Berater":
                     - Unternehmen / Branche: {company_details}
                     - Größe: {company_size}
                     - Relevante Abteilungen: {', '.join(departments) if departments else 'Nicht spezifiziert'}
-                    - Vorhandene Datenquellen: {', '.joi (all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
+                    
+                    --- FEHLERKORREKTUR HIER ---
+                    - Vorhandene Datenquellen: {', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
                     - Hauptziele: {', '.join(all_goals)}
                     
                     Bitte finde die relevantesten Informationen zu Methoden, Roadmaps, Best Practices und Use Cases,
