@@ -155,7 +155,7 @@ st.markdown(f"""
         border-bottom: 2px solid #DDDDDD !important; 
     }}
     .sac-tabs-item {{
-        font-family: 'Lexend Exa', sans-serif !important; /* NEUE SCHRIFTART */
+        font-family: 'Lexend Exa', sans-serif !important; /* HIER PASSIERT ES */
         font-weight: 700 !important;
         background-color: #EAEAEA !important; 
         border-radius: 0.25rem 0.25rem 0 0 !important; 
@@ -166,30 +166,33 @@ st.markdown(f"""
     
     /* 5. Aktiver Tab (Farbe wird jetzt über Python gesteuert) */
     .sac-tabs-item-active {{
-        font-family: 'Lexend Exa', sans-serif !important; /* NEUE SCHRIFTART */
+        font-family: 'Lexend Exa', sans-serif !important; /* HIER PASSIERT ES */
         font-weight: 700 !important;
         color: #FFFFFF !important; /* Weiße Schrift (Kontrast zu Rot) */
         border: 2px solid #ea3323 !important;  
         border-bottom: 2px solid #FAFAFA !important; /* Schneidet Linie mit BG-Farbe */
     }}
 
-    /* 6. Suchschlitz-Rand (KORRIGIERT FÜR FOKUS-FORM) */
+    /* 6. Suchschlitz-Rand (FINALER FOKUS-FIX) */
+    
+    /* Mache den äußeren Container unsichtbar */
     div[data-testid="stChatInput"] {{
-        border: 1px solid #ea3323 !important;
-        border-radius: 0.5rem !important; /* Runde Ecken */
-        background-color: #FFFFFF;
+        border: none !important;
+        background-color: transparent !important;
     }}
+
+    /* Style den inneren Input direkt */
     div[data-testid="stChatInput"] div[data-baseweb="input"] {{
-         border: none !important;
-         box-shadow: none !important;
-         background-color: transparent !important;
+         border: 1px solid #ea3323 !important; /* Roter Rand */
+         border-radius: 0.5rem !important; /* Runde Ecken */
+         background-color: #FFFFFF !important;
+         box-shadow: none !important; /* Entferne Standard-Schatten */
     }}
-    div[data-testid="stChatInput"]:focus-within {{
+
+    /* Roter "Glow" beim Klicken (auf dem inneren Input) */
+    div[data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
         border-color: #ea3323 !important;
         box-shadow: 0 0 0 2px #ea332333 !important; /* Heller roter Schatten */
-    }}
-    div[data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
-        box-shadow: none !important;
     }}
     </style>
     """, unsafe_allow_html=True)
