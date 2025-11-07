@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 27: Brutalist-Theme mit Momo Signature Font)
+# Streamlit RAG (VERSION 28: Mit Query Rewriter)
 from __future__ import annotations
 
 import os, re
@@ -87,6 +87,22 @@ Auch bei Folgefragen ("Erzähl mir mehr zu...") nutzt du den gesamten Gesprächs
 - SEI HILFREICH, aber fasse dich kurz. Deine Antwort ist eine *automatisierte Erstanalyse*. Der Nutzer weiß, dass der nächste Schritt ein persönliches Gespräch ist.
 """
 
+# --- NEU: System-Prompt für den Query Rewriter ---
+QUERY_REWRITER_PROMPT = """Du bist ein Experte für semantische Suche. Deine Aufgabe ist es, die folgende Nutzerfrage in eine optimale, schlagwortreiche Suchanfrage für eine Vektor-Datenbank umzuformulieren.
+- Nutze dein Weltwissen, um die vage Anfrage (z.B. nach Kategorien) um konkrete, verwandte Begriffe, Synonyme oder Beispiele zu erweitern.
+- Die Ausgabe soll nur der neue, verbesserte Suchbegriff sein, keine Erklärungen.
+- Beispiel-Frage: "Welche deutschen Firmen nutzen KI?"
+- Beispiel-Ausgabe: "KI Anwendungsfälle, Beispiele und Case Studies bei deutschen Unternehmen wie Otto, Hornbach, Rossmann, Körber, Siemens, Bosch, Stadtverwaltung München"
+- Beispiel-Frage: "Wie fange ich an?"
+- Beispiel-Ausgabe: "Anfangen mit KI, erste Schritte KI-Implementierung, KI-Roadmap für Anfänger, Quick Wins KI"
+
+Nutzerfrage:
+{prompt}
+
+Optimierte Suchanfrage:
+"""
+
+
 # ------------------------------------------------------------------------------
 # Streamlit UI-Setup
 # ------------------------------------------------------------------------------
@@ -104,12 +120,11 @@ st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
 # --- CSS-HACK (Minimal & Pragmatisch) ---
 st.markdown(f"""
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
     <style>
+    /* Die Schriftart wird jetzt von config.toml gesteuert */
+    
     /* Vergrößere den Hauptcontainer für mehr Platz */
     .main .block-container {{
         padding-top: 2rem;
@@ -117,12 +132,7 @@ st.markdown(f"""
         padding-left: 3rem;
         padding-right: 3rem;
     }}
-    /* Besseres Aussehen für die Chat-Nachrichten (mit kantigem Rand) */
-    .st-emotion-cache-4z1n4l {{ /* Chat-Nachrichten-Container */
-        border-radius: 0; /* Kantig (Brutalismus) */
-        padding: 1rem;
-        border: 1px solid #000000; /* Schwarzer Rahmen */
-    }}
+    /* Die Ränder werden jetzt von config.toml gesteuert */
     </style>
     """, unsafe_allow_html=True)
 # --- ENDE CSS-HACK ---
@@ -134,8 +144,7 @@ st.markdown(f"""
 @contextlib.contextmanager
 def connect_db():
     """ 
-    Verbindet sich mit der Supabase Postgres DB (via Pooler- oder Direct-String aus .env) 
-    und schließt die Verbindung sicher.
+    Verbindet sich mit der Supabase Postgres DB (via Pooler-String) und schließt die Verbindung sicher.
     """
     conn = None 
     try:
@@ -165,6 +174,47 @@ def get_embedding(text_to_embed: str, model: str = DEFAULT_EMBED_MODEL) -> List[
     except Exception as e:
         st.error(f"Fehler bei OpenAI Embedding API: {e}")
         st.stop()
+
+# --- NEU: Hilfsfunktion für Query Rewriting ---
+@st.cache_data(show_spinner="[OpenAI] Optimiere Suchanfrage...")
+def rewrite_query(prompt: str, model: str) -> str:
+    """
+    Nutzt ein LLM, um eine vage Nutzerfrage in eine schlagwortreiche Suchanfrage umzuwandeln.
+    """
+    # Kurze Anfragen (z.B. "Hallo") nicht umschreiben
+    if len(prompt.split()) < 3:
+        # Erstelle den Expander, aber zeige ihn nicht an, es sei denn, der Debug-Modus ist aktiv
+        if 'debug_hits' in locals() and debug_hits:
+            with st.sidebar.expander("Suchanfrage-Optimierung (Debug)", expanded=False):
+                st.info("Kurze Anfrage, wird nicht umgeschrieben.")
+                st.write("**Original & Optimiert:**", prompt)
+        return prompt
+        
+    messages = [
+        {"role": "system", "content": QUERY_REWRITER_PROMPT.format(prompt=prompt)}
+    ]
+    
+    try:
+        if _OPENAI_MODE == "sdk_v1":
+            res = client.chat.completions.create(model=model, messages=messages, temperature=0.0)
+            rewritten_prompt = res.choices[0].message.content
+        else:
+            res = client.ChatCompletion.create(model=model, messages=messages, temperature=0.0)
+            rewritten_prompt = res['choices'][0]['message']['content']
+        
+        # Saubermachen
+        rewritten_prompt = rewritten_prompt.strip().replace('"', '')
+        
+        # Debug-Info hinzufügen
+        with st.sidebar.expander("Suchanfrage-Optimierung (Debug)", expanded=True): # Standardmäßig geöffnet
+            st.write("**Original:**", prompt)
+            st.write("**Optimiert:**", rewritten_prompt)
+
+        return rewritten_prompt
+        
+    except Exception as e:
+        st.warning(f"Fehler beim Query Rewriting: {e}. Nutze Original-Anfrage.")
+        return prompt
 
 
 def show_hits(hits: List[Dict]):
@@ -290,32 +340,53 @@ def ctx_to_text(blocks: List[Dict]) -> str:
     return "\n".join(ctx)
 
 # ------------------------------------------------------------------------------
-# Generische RAG-Pipeline
+# Generische RAG-Pipeline (JETZT MIT QUERY REWRITER)
 # ------------------------------------------------------------------------------
-def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> Tuple[str, str, List[Dict]]:
+def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int, do_rewrite: bool = True) -> Tuple[str, List[Dict]]:
     """
     Führt die gesamte RAG-Pipeline aus: 
-    Embedding -> Vektorsuche -> Keyword-Suche -> Ranking -> Kontext-Erstellung.
-    Gibt (kontext_string, clean_prompt, ranked_chunks) zurück.
+    1. Query Rewriting (optional)
+    2. Embedding -> Vektorsuche -> Keyword-Suche -> Ranking -> Kontext-Erstellung.
+    Gibt (kontext_string, ranked_chunks) zurück.
     """
-    q_clean, terms, must = parse_query(prompt)
+    
+    # --- SCHRITT 1: ANFRAGE UMSCHREIBEN ---
+    if do_rewrite:
+        # Wir verwenden das Chat-Modell, da es "klug" sein muss
+        search_prompt = rewrite_query(prompt, model=chat_model)
+    else:
+        search_prompt = prompt
+        with st.sidebar.expander("Suchanfrage-Optimierung (Debug)", expanded=False):
+            st.info("Query Rewriting für diese Anfrage übersprungen (z.B. im Berater).")
+            st.write("**Original & Optimiert:**", search_prompt)
+
+    
+    # --- SCHRITT 2: PARSEN (der *umgeschriebenen* Anfrage) ---
+    q_clean_rewritten, terms, must = parse_query(search_prompt)
     if must:
         st.info(f"Filtere Ergebnisse auf: `{must}`")
 
+    # --- SCHRITT 3: EMBEDDING (der *umgeschriebenen* Anfrage) ---
     try:
-        query_embedding = get_embedding(prompt, model=embed_model)
+        # Wir erstellen das Embedding von der UMGESCHRIEBENEN Anfrage
+        query_embedding = get_embedding(search_prompt, model=embed_model)
     except Exception as e:
         st.error(f"Fehler beim Erstellen des OpenAI Embeddings: {e}")
         st.stop()
 
+    # --- SCHRITT 4: SUCHEN ---
+    # Vektor-Suche nutzt das neue Embedding
     vec_hits = match_documents(query_embedding, match_threshold=threshold, match_count=k)
-    kw_hits = keyword_search(terms, k=k, require_term=must if must else None)
+    # Keyword-Suche nutzt die neuen 'terms'
+    kw_hits = keyword_search(terms, k=k, require_term=must if must else None) 
 
+    # --- SCHRITT 5: RANKEN & KONTEXTEN ---
     ranked_chunks = combine_and_rank_chunks(vec_hits + kw_hits, max_chunks=max_chunks)
     blocks = pick_context(ranked_chunks)
     ctx = ctx_to_text(blocks)
     
-    return ctx, q_clean, ranked_chunks
+    # --- SCHRITT 6: ZURÜCKGEBEN ---
+    return ctx, ranked_chunks # Gibt den Kontext und die Treffer zurück
 
 # ------------------------------------------------------------------------------
 # Streamlit Hauptlogik
@@ -406,7 +477,9 @@ if selected_tab == "Allgemeiner Chat":
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        ctx, q_clean, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
+        # --- KORRIGIERTER AUFRUF (Query Rewriter ist jetzt drin) ---
+        # do_rewrite=True ist der Standard und sorgt für die "schlaue" Suche
+        ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm, do_rewrite=True)
         
         if debug_hits:
             show_hits(ranked_chunks) 
@@ -419,6 +492,8 @@ if selected_tab == "Allgemeiner Chat":
         messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages_for_api.extend(st.session_state.messages) 
 
+        # Diese Logik funktioniert weiterhin, da sie den *originalen* Prompt
+        # aus st.session_state.messages holt.
         if ctx.strip():
             last_user_message = messages_for_api.pop() 
             messages_for_api.append({
@@ -545,7 +620,10 @@ if selected_tab == "Strategie Berater":
                     
                     user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {', '.join(all_goals)}."
                     
-                    ctx, q_clean, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
+                    # --- KORRIGIERTER AUFRUF (Query Rewriter ist jetzt drin) ---
+                    # Wir überspringen den Rewriter (do_rewrite=False), da der Formular-Prompt
+                    # bereits sehr spezifisch und lang ist.
+                    ctx, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm, do_rewrite=False)
 
                     if debug_hits:
                         show_hits(ranked_chunks)
@@ -557,6 +635,8 @@ if selected_tab == "Strategie Berater":
                     
                     messages_for_api = [
                         {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT},
+                        # WICHTIG: Wir senden den *Original* mega_prompt_content,
+                        # nicht den umgeschriebenen, damit das LLM die Details kennt.
                         {"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\nKONTEXT:\n{ctx}"}
                     ]
                     
@@ -599,7 +679,9 @@ if selected_tab == "Strategie Berater":
             st.chat_message("user").markdown(prompt)
             st.session_state.berater_messages.append({"role": "user", "content": prompt})
 
-            ctx, q_clean, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
+            # --- KORRIGIERTER AUFRUF (Query Rewriter ist jetzt drin) ---
+            # do_rewrite=True ist der Standard und sorgt für die "schlaue" Suche
+            ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm, do_rewrite=True)
             
             if debug_hits:
                 show_hits(ranked_chunks) 
@@ -612,6 +694,8 @@ if selected_tab == "Strategie Berater":
             messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
             messages_for_api.extend(st.session_state.berater_messages) 
 
+            # Diese Logik funktioniert weiterhin, da sie den *originalen* Prompt
+            # aus st.session_state.berater_messages holt.
             if ctx.strip():
                 last_user_message = messages_for_api.pop() 
                 messages_for_api.append({

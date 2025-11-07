@@ -1,38 +1,44 @@
 [theme]
 # Basis-Theme
 base = "light"
+font = "Nunito:https://fonts.googleapis.com/css2?family=Nunito&display=swap"
+codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
-# KORREKTUR: Brutalismus = rohe, technische Schriftart
-font = "monospace"
+# --- Distinguiertes Farbschema (Mauve/Beige) ---
 
-# Schrille Demo-Farben (Deine Auswahl - super!)
-primaryColor = "#FF00FF"           # Magenta - für Buttons und Highlights
-backgroundColor = "#FFFF00"        # Gelb - Hintergrund
-secondaryBackgroundColor = "#00FFFF"  # Cyan - für Widgets
-textColor = "#0000FF"              # Blau - Textfarbe
+# Primärfarbe (Mauve für Buttons, Highlights)
+primaryColor = "#8C7D8C" # Muted Mauve
 
-# Link-Farben
-linkColor = "#FF0000"              # Rot - für Links
+# Hintergrundfarben (Beige-Töne)
+backgroundColor = "#FAF9F6"           # Sehr helles Beige / Off-White
+secondaryBackgroundColor = "#EAE6E1"  # Helleres Mauve-Beige (für Widgets)
 
-# Code-Farben
-codeBackgroundColor = "#FF8800"    # Orange - Code-Hintergrund
+# Textfarbe (Dunkles Mauve-Grau statt Schwarz)
+textColor = "#4A444B"
 
-# Schriftgrößen
+# Link-Farbe (Dunkleres, klares Mauve)
+linkColor = "#6D5A6D"
+
+# Code-Hintergrund (Subtiler Beige-Ton)
+codeBackgroundColor = "#EFEBE6"
+
+# Schriftgröße
 baseFontSize = 16
 
-# KORREKTUR: Brutalismus = keine runden Ecken
-baseRadius = "none"
+# Elegante = leichte Rundungen
+baseRadius = "0.25rem"
 
-# Border-Einstellungen
-borderColor = "#FF00FF"            # Magenta - Rahmen
+# Border-Einstellungen (Subtiles Mauve-Grau)
+borderColor = "#D1C9D1"
+
 
 [theme.sidebar]
-# Sidebar mit anderen schrillen Farben (Deine Auswahl)
-backgroundColor = "#00FFFF"        # Cyan - Sidebar-Hintergrund
-secondaryBackgroundColor = "#FFFF00"  # Gelb - Sidebar-Widgets
-primaryColor = "#00FF00"           # Grün - Sidebar-Primary
-textColor = "#FF00FF"              # Magenta - Sidebar-Text
-borderColor = "#FF0000"            # Rot - Sidebar-Border
+# Sidebar soll sich elegant einfügen
+backgroundColor = "#EAE6E1"           # Helleres Mauve-Beige (Haupt-Sidebar)
+secondaryBackgroundColor = "#FAF9F6"   # Off-White (Widgets in der Sidebar)
+primaryColor = "#8C7D8C"             # Muted Mauve (wie Hauptseite)
+textColor = "#4A444B"                 # Dunkles Mauve-Grau (wie Hauptseite)
+borderColor = "#D1C9D1"            # Subtiles Mauve-Grau
 
 [server]
 # Wichtig: Damit die App ohne Warnungen läuft
