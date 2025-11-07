@@ -8,3 +8,6 @@ __pycache__/
 
 # macOS Systemdateien
 .DS_Store
+
+#build graph script
+build_graph.py

@@ -1,12 +1,11 @@
 # app.py
-# Streamlit RAG (VERSION 28: Mit Query Rewriter)
+# Streamlit RAG (VERSION 31.1: HYBRID GRAPH RAG - ki_strat_* Tabellen)
 from __future__ import annotations
 
-import os, re
+import os, re, json
 from typing import Any, Dict, List, Tuple
 from decimal import Decimal
 import contextlib 
-# (socket und urllib.parse wurden entfernt)
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -22,23 +21,17 @@ except Exception:
     import openai
     _OPENAI_MODE = "legacy"
 
-
 # ------------------------------------------------------------------------------
 # Konfiguration 
 # ------------------------------------------------------------------------------
 load_dotenv(override=True)
 
-# Wir zielen standardmäßig auf die kb_chunks Tabelle
 KB_TABLE   = os.getenv("KB_TABLE", "public.kb_chunks") 
 EMBED_COL  = os.getenv("EMBED_COL", "embedding_openai")
-
-# Spalten in kb_chunks, die wir für Keywords durchsuchen
 TEXT_COLS  = [c.strip() for c in os.getenv("TEXT_COLS", "chunk_text, source_filename").split(",")]
-# Die Spalte, die den eigentlichen Text für das LLM enthält
 CHUNK_TEXT_COL = "chunk_text"
-# Die Spalte, die den Original-Dateinamen enthält
 FILENAME_COL = "source_filename"
-
+CHUNK_ID_COL = "id" # Wichtig für Graph-Verknüpfung
 
 DEFAULT_CHAT_MODEL  = os.getenv("CHAT_MODEL", "gpt-4.1-mini")
 DEFAULT_EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
@@ -56,7 +49,6 @@ if _OPENAI_MODE == "sdk_v1":
 else:
     openai.api_key = OPENAI_API_KEY
     client = openai
-
 
 # System Prompt für den Chat
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
@@ -87,19 +79,17 @@ Auch bei Folgefragen ("Erzähl mir mehr zu...") nutzt du den gesamten Gesprächs
 - SEI HILFREICH, aber fasse dich kurz. Deine Antwort ist eine *automatisierte Erstanalyse*. Der Nutzer weiß, dass der nächste Schritt ein persönliches Gespräch ist.
 """
 
-# --- NEU: System-Prompt für den Query Rewriter ---
-QUERY_REWRITER_PROMPT = """Du bist ein Experte für semantische Suche. Deine Aufgabe ist es, die folgende Nutzerfrage in eine optimale, schlagwortreiche Suchanfrage für eine Vektor-Datenbank umzuformulieren.
-- Nutze dein Weltwissen, um die vage Anfrage (z.B. nach Kategorien) um konkrete, verwandte Begriffe, Synonyme oder Beispiele zu erweitern.
-- Die Ausgabe soll nur der neue, verbesserte Suchbegriff sein, keine Erklärungen.
-- Beispiel-Frage: "Welche deutschen Firmen nutzen KI?"
-- Beispiel-Ausgabe: "KI Anwendungsfälle, Beispiele und Case Studies bei deutschen Unternehmen wie Otto, Hornbach, Rossmann, Körber, Siemens, Bosch, Stadtverwaltung München"
-- Beispiel-Frage: "Wie fange ich an?"
-- Beispiel-Ausgabe: "Anfangen mit KI, erste Schritte KI-Implementierung, KI-Roadmap für Anfänger, Quick Wins KI"
+# --- NEU: System-Prompt für Entitäts-Extraktion ---
+ENTITY_EXTRACTOR_PROMPT = """
+Du bist ein Experte für semantische Suche. Extrahiere die 2-3 wichtigsten Substantive oder Konzepte (Entitäten) aus der folgenden Nutzerfrage.
+- Gib NUR eine JSON-Liste von Strings zurück.
+- Beispiel: "Wie erstelle ich eine KI-Roadmap für mein KMU?"
+- Ausgabe: ["KI-Roadmap", "KMU"]
 
 Nutzerfrage:
 {prompt}
 
-Optimierte Suchanfrage:
+JSON-Liste:
 """
 
 
@@ -107,26 +97,21 @@ Optimierte Suchanfrage:
 # Streamlit UI-Setup
 # ------------------------------------------------------------------------------
 
-# 'theme' wird jetzt aus .streamlit/config.toml geladen
 st.set_page_config(
     page_title="KI-Strategie Berater",
-    page_icon="🤖", # Emoji funktioniert immer :)
+    page_icon="🤖", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("KI-Strategie Berater") # st.title wird zu <h1>
-st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
+st.title("KI-Strategie Berater") 
+st.sidebar.image("ciferecigo.png", width=200)
 
-# --- CSS-HACK (Minimal & Pragmatisch) ---
-# KORREKTUR: CSS-Block massiv erweitert für UI-Fixes
+# --- CSS-HACK (Unverändert) ---
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
     <style>
-    /* Die Schriftart wird jetzt von config.toml gesteuert */
-    
-    /* Vergrößere den Hauptcontainer für mehr Platz */
     .main .block-container {{
         padding-top: 2rem;
         padding-bottom: 2rem;
@@ -134,54 +119,44 @@ st.markdown(f"""
         padding-right: 3rem;
     }}
     
-    /* --- NEUE KORREKTUREN (Ihre UI-Wünsche) --- */
-
-    /* 1. Formular-Rahmen entfernen */
     [data-testid="stForm"] {{
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
     }}
 
-    /* 2. Dropdown-Rahmen (Selectbox) HINZUFÜGEN */
     [data-testid="stSelectbox"] > div {{
         border: 1px solid #DDDDDD !important; 
-        border-radius: 0.25rem; /* Matcht config.toml baseRadius */
+        border-radius: 0.25rem;
     }}
-    /* 2b. Auch für Multiselect */
     [data-testid="stMultiSelect"] {{
         border: 1px solid #DDDDDD !important;
         border-radius: 0.25rem;
     }}
-    
-    /* --- KORREKTUR: 2c. Rahmen für Text-Inputs und Text-Areas HINZUFÜGEN --- */
     [data-testid="stTextInput"] > div > div > input,
     [data-testid="stTextArea"] > div > textarea {{
         border: 1px solid #DDDDDD !important;
         border-radius: 0.25rem !important;
-        padding-left: 0.5rem; /* Kleiner Innenabstand */
+        padding-left: 0.5rem; 
     }}
     
-    /* 3. Reiter (sac.tabs) sichtbarer machen (Ordner-Look) - VERBESSERT */
     .sac-tabs-bar {{
-        border-bottom: 2px solid #DDDDDD !important; /* Linie unter den Tabs */
+        border-bottom: 2px solid #DDDDDD !important; 
     }}
     .sac-tabs-item {{
-        background-color: #EAEAEA !important; /* Inaktive Tabs (dunkleres grau) */
-        border-radius: 0.25rem 0.25rem 0 0 !important; /* Oben rund */
-        margin-bottom: -2px !important; /* Überlappt die untere Linie */
-        border: 1px solid #DDDDDD !important; /* Schwächerer Rand */
+        background-color: #EAEAEA !important; 
+        border-radius: 0.25rem 0.25rem 0 0 !important; 
+        margin-bottom: -2px !important; 
+        border: 1px solid #DDDDDD !important; 
         border-bottom: none !important;
     }}
     .sac-tabs-item-active {{
-        background-color: #FFFFFF !important; /* Aktiver Tab (weiß) */
-        border: 2px solid #DDDDDD !important;  /* Stärkerer Rand */
-        border-bottom: 2px solid #FFFFFF !important; /* "Schneidet" die Linie */
-        color: #ea3323 !important; /* Rote Schrift (primaryColor) */
+        background-color: #FFFFFF !important; 
+        border: 2px solid #DDDDDD !important;  
+        border-bottom: 2px solid #FFFFFF !important; 
+        color: #ea3323 !important; 
         font-weight: bold;
     }}
-    /* --- ENDE NEUE KORREKTUREN --- */
-
     </style>
     """, unsafe_allow_html=True)
 # --- ENDE CSS-HACK ---
@@ -193,7 +168,7 @@ st.markdown(f"""
 @contextlib.contextmanager
 def connect_db():
     """ 
-    Verbindet sich mit der Supabase Postgres DB (via Pooler-String) und schließt die Verbindung sicher.
+    Stellt eine Standardverbindung her. Wird jetzt für ALLES verwendet.
     """
     conn = None 
     try:
@@ -207,7 +182,6 @@ def connect_db():
     finally:
         if conn:
             conn.close() 
-
 
 @st.cache_data(show_spinner="[OpenAI] Erstelle Vektor-Embedding für Suchanfrage...")
 def get_embedding(text_to_embed: str, model: str = DEFAULT_EMBED_MODEL) -> List[float]:
@@ -224,46 +198,67 @@ def get_embedding(text_to_embed: str, model: str = DEFAULT_EMBED_MODEL) -> List[
         st.error(f"Fehler bei OpenAI Embedding API: {e}")
         st.stop()
 
-# --- NEU: Hilfsfunktion für Query Rewriting ---
-@st.cache_data(show_spinner="[OpenAI] Optimiere Suchanfrage...")
-def rewrite_query(prompt: str, model: str) -> str:
-    """
-    Nutzt ein LLM, um eine vage Nutzerfrage in eine schlagwortreiche Suchanfrage umzuwandeln.
-    """
-    # Kurze Anfragen (z.B. "Hallo") nicht umschreiben
-    if len(prompt.split()) < 3:
-        # Erstelle den Expander, aber zeige ihn nicht an, es sei denn, der Debug-Modus ist aktiv
-        if 'debug_hits' in locals() and debug_hits:
-            with st.sidebar.expander("Suchanfrage-Optimierung (Debug)", expanded=False):
-                st.info("Kurze Anfrage, wird nicht umgeschrieben.")
-                st.write("**Original & Optimiert:**", prompt)
-        return prompt
-        
+# --- NEU: Hilfsfunktion für Entitäts-Extraktion (Unverändert) ---
+@st.cache_data(show_spinner="[OpenAI] Extrahiere Entitäten...")
+def extract_entities_from_prompt(prompt: str, model: str) -> List[str]:
     messages = [
-        {"role": "system", "content": QUERY_REWRITER_PROMPT.format(prompt=prompt)}
+        {"role": "system", "content": ENTITY_EXTRACTOR_PROMPT.format(prompt=prompt)}
     ]
-    
     try:
         if _OPENAI_MODE == "sdk_v1":
             res = client.chat.completions.create(model=model, messages=messages, temperature=0.0)
-            rewritten_prompt = res.choices[0].message.content
+            data = res.choices[0].message.content
         else:
             res = client.ChatCompletion.create(model=model, messages=messages, temperature=0.0)
-            rewritten_prompt = res['choices'][0]['message']['content']
+            data = res['choices'][0]['message']['content']
         
-        # Saubermachen
-        rewritten_prompt = rewritten_prompt.strip().replace('"', '')
+        entities = json.loads(data)
         
-        # Debug-Info hinzufügen
-        with st.sidebar.expander("Suchanfrage-Optimierung (Debug)", expanded=True): # Standardmäßig geöffnet
-            st.write("**Original:**", prompt)
-            st.write("**Optimiert:**", rewritten_prompt)
+        with st.sidebar.expander("Entitäts-Extraktion (Graph-Debug)", expanded=True):
+            st.write("**Original-Frage:**", prompt)
+            st.write("**Extrahierte Entitäten:**", entities)
+            
+        return entities
+    except Exception as e:
+        st.warning(f"Fehler bei Entitäts-Extraktion: {e}. Nutze leere Liste.")
+        return []
 
-        return rewritten_prompt
+# --- KORREKTUR: Graph-Abfrage mit STANDARD SQL & neuen Tabellennamen ---
+@st.cache_data(show_spinner="[Graph] Suche relevante Chunks...")
+def query_graph_for_chunks(entities: List[str]) -> List[str]:
+    """ 
+    Frägt die SQL-Graph-Tabellen nach Chunks ab.
+    Gibt eine Liste von Chunk-IDs zurück.
+    """
+    if not entities:
+        return []
+        
+    chunk_ids = set()
+    
+    # Standard SQL JOIN-Abfrage
+    query = f"""
+    SELECT DISTINCT e.chunk_id
+    FROM public.ki_strat_edges AS e
+    JOIN public.ki_strat_nodes AS n ON e.source_node_id = n.id
+    WHERE n.name = ANY(%s);
+    """
+
+    try:
+        with connect_db() as conn: # Wir nutzen die normale connect_db Funktion
+            with conn.cursor() as cur:
+                cur.execute(query, (entities,))
+                results = cur.fetchall()
+                for row in results:
+                    chunk_ids.add(str(row[0])) # Konvertiere UUID/ID zu String
+                    
+        with st.sidebar.expander("Graph-Suchtreffer (Debug)", expanded=False):
+            st.write(f"Graph lieferte {len(chunk_ids)} Chunk-IDs:", chunk_ids)
+            
+        return list(chunk_ids)
         
     except Exception as e:
-        st.warning(f"Fehler beim Query Rewriting: {e}. Nutze Original-Anfrage.")
-        return prompt
+        st.warning(f"Fehler bei SQL-Graph-Abfrage: {e}")
+        return []
 
 
 def show_hits(hits: List[Dict]):
@@ -275,7 +270,7 @@ def show_hits(hits: List[Dict]):
         for i, hit in enumerate(hits):
             data.append({
                 "Nr": i + 1,
-                "Score": f"{{hit.get('rank_score', 0.0):.4f}}",
+                "Score": f"{hit.get('rank_score', 0.0):.4f}", 
                 "Filename": hit.get('filename', 'N/A'),
                 "Text": hit.get('text_content', hit.get('content', 'N/A'))[:500] + "..."
             })
@@ -291,7 +286,6 @@ def parse_query(q: str) -> Tuple[str, List[str], str | None]:
         q_clean = q_clean.replace(match.group(0), "").strip()
     terms = re.split(r'\s+', q_clean)
     terms = [re.sub(r'\W+', '', t).lower() for t in terms]
-    # Bessere Stoppwortliste
     stopwords = [
         "a", "ab", "aber", "als", "am", "an", "auch", "auf", "aus", "bei", "bin", 
         "bis", "bist", "da", "dadurch", "daher", "darum", "das", "dass", "dein", 
@@ -319,7 +313,7 @@ def parse_query(q: str) -> Tuple[str, List[str], str | None]:
 def match_documents(query_embedding: List[float], match_threshold: float, match_count: int) -> List[Dict]:
     sql = f"""
     SELECT 
-        id::text, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content,
+        {CHUNK_ID_COL}::text as id, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content,
         1 - ({EMBED_COL} <=> %s::vector) AS rank_score
     FROM {KB_TABLE}
     WHERE 1 - ({EMBED_COL} <=> %s::vector) > %s
@@ -336,7 +330,6 @@ def keyword_search(query_terms: List[str], k: int = 10, require_term: str | None
     cols_to_search = " || ' ' || ".join(TEXT_COLS)
     tsvector_col = f"to_tsvector('german', {cols_to_search})"
     
-    # Zurück zu "&" (UND) für präzise Keyword-Suche
     tsquery = " & ".join(query_terms)
     
     if require_term:
@@ -344,7 +337,7 @@ def keyword_search(query_terms: List[str], k: int = 10, require_term: str | None
 
     sql = f"""
     SELECT 
-        id::text, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content,
+        {CHUNK_ID_COL}::text as id, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content,
         ts_rank({tsvector_col}, to_tsquery('german', %s)) AS rank_score
     FROM {KB_TABLE}
     WHERE {tsvector_col} @@ to_tsquery('german', %s)
@@ -355,18 +348,34 @@ def keyword_search(query_terms: List[str], k: int = 10, require_term: str | None
             cur.execute(sql, (tsquery, tsquery, k))
             return cur.fetchall()
 
-
-def combine_and_rank_chunks(hits: List[Dict], max_chunks: int) -> List[Dict]:
-    deduplicated: Dict[str, Dict] = {} 
+# --- Angepasste Ranking-Funktion (Hybrid) (Unverändert) ---
+def combine_and_rank_chunks(
+    vec_hits: List[Dict], 
+    kw_hits: List[Dict], 
+    graph_hits: List[Dict], 
+    max_chunks: int
+) -> List[Dict]:
     
-    sorted_hits = sorted(hits, key=lambda x: x.get('rank_score', 0.0), reverse=True)
-    for hit in sorted_hits:
+    deduplicated: Dict[str, Dict] = {} 
+
+    for hit in graph_hits:
+        hit['rank_score'] = 100.0 
+        key = hit['id']
+        if key not in deduplicated:
+            deduplicated[key] = hit
+
+    all_other_hits = sorted(vec_hits + kw_hits, key=lambda x: x.get('rank_score', 0.0), reverse=True)
+    
+    for hit in all_other_hits:
         key = hit['id'] 
         if key not in deduplicated:
             deduplicated[key] = hit
+        
         if len(deduplicated) >= max_chunks:
             break
-    return list(deduplicated.values())
+            
+    final_list = sorted(deduplicated.values(), key=lambda x: x.get('rank_score', 0.0), reverse=True)
+    return final_list[:max_chunks]
 
 
 def pick_context(hits: List[Dict]) -> List[Dict]:
@@ -389,48 +398,65 @@ def ctx_to_text(blocks: List[Dict]) -> str:
     return "\n".join(ctx)
 
 # ------------------------------------------------------------------------------
-# Generische RAG-Pipeline (JETZT MIT QUERY REWRITER)
+# Generische RAG-Pipeline (HYBRID: SQL-GRAPH + VEKTOR + KEYWORD)
 # ------------------------------------------------------------------------------
-def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int, do_rewrite: bool = True) -> Tuple[str, List[Dict]]:
+def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> Tuple[str, List[Dict]]:
     """
-    Führt die gesamte RAG-Pipeline aus: 
-    1. Query Rewriting (optional)
-    2. Embedding -> Vektorsuche -> Keyword-Suche -> Ranking -> Kontext-Erstellung.
+    Führt die gesamte HYBRID-RAG-Pipeline aus:
+    1. Entitäts-Extraktion -> SQL-Graph-Suche (holt Chunk-IDs)
+    2. Embedding -> Vektorsuche
+    3. Keyword-Suche
+    4. Ranking (Graph-Treffer haben Prio) -> Kontext-Erstellung.
     Gibt (kontext_string, ranked_chunks) zurück.
     """
     
-    # --- SCHRITT 1: ANFRAGE UMSCHREIBEN ---
-    if do_rewrite:
-        # Wir verwenden das Chat-Modell, da es "klug" sein muss
-        search_prompt = rewrite_query(prompt, model=chat_model)
-    else:
-        search_prompt = prompt
-        with st.sidebar.expander("Suchanfrage-Optimierung (Debug)", expanded=False):
-            st.info("Query Rewriting für diese Anfrage übersprungen (z.B. im Berater).")
-            st.write("**Original & Optimiert:**", search_prompt)
-
+    # --- SCHRITT 1: GRAPH-SUCHE ---
+    entities = extract_entities_from_prompt(prompt, model=chat_model)
+    graph_chunk_ids = query_graph_for_chunks(entities)
     
-    # --- SCHRITT 2: PARSEN (der *umgeschriebenen* Anfrage) ---
-    q_clean_rewritten, terms, must = parse_query(search_prompt)
+    # --- SCHRITT 2: PARSEN ---
+    q_clean, terms, must = parse_query(prompt) 
     if must:
         st.info(f"Filtere Ergebnisse auf: `{must}`")
 
-    # --- SCHRITT 3: EMBEDDING (der *umgeschriebenen* Anfrage) ---
+    # --- SCHRITT 3: EMBEDDING ---
     try:
-        # Wir erstellen das Embedding von der UMGESCHRIEBENEN Anfrage
-        query_embedding = get_embedding(search_prompt, model=embed_model)
+        query_embedding = get_embedding(prompt, model=embed_model)
     except Exception as e:
         st.error(f"Fehler beim Erstellen des OpenAI Embeddings: {e}")
         st.stop()
 
-    # --- SCHRITT 4: SUCHEN ---
-    # Vektor-Suche nutzt das neue Embedding
+    # --- SCHRITT 4: HYBRID-SUCHE ---
+    
+    # A) Vektor-Suche
     vec_hits = match_documents(query_embedding, match_threshold=threshold, match_count=k)
-    # Keyword-Suche nutzt die neuen 'terms'
+    
+    # B) Keyword-Suche
     kw_hits = keyword_search(terms, k=k, require_term=must if must else None) 
+    
+    # C) Graph-Treffer
+    graph_hits = []
+    if graph_chunk_ids:
+        with connect_db() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Wichtig: Stelle sicher, dass der Typ der ID (hier::text) 
+                # mit dem Typ in graph_chunk_ids (jetzt strings) übereinstimmt.
+                sql = f"""
+                SELECT {CHUNK_ID_COL}::text as id, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content
+                FROM {KB_TABLE}
+                WHERE {CHUNK_ID_COL}::text = ANY(%s); 
+                """
+                cur.execute(sql, (graph_chunk_ids,))
+                graph_hits = cur.fetchall()
 
     # --- SCHRITT 5: RANKEN & KONTEXTEN ---
-    ranked_chunks = combine_and_rank_chunks(vec_hits + kw_hits, max_chunks=max_chunks)
+    ranked_chunks = combine_and_rank_chunks(
+        vec_hits, 
+        kw_hits, 
+        graph_hits, 
+        max_chunks=max_chunks
+    )
+    
     blocks = pick_context(ranked_chunks)
     ctx = ctx_to_text(blocks)
     
@@ -445,7 +471,6 @@ def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int, do_
 with st.sidebar:
     st.subheader("Such-Einstellungen")
     
-    # Standard-Streamlit-Slider
     threshold = st.slider(
         "Ähnlichkeits-Threshold (Vektor)", 
         min_value=0.0, max_value=1.0, value=0.01, step=0.01,
@@ -470,7 +495,6 @@ with st.sidebar:
     
     debug_hits = st.checkbox("Debug-Modus (Treffer anzeigen)", value=True)
     
-    # sac.buttons (jetzt mit Icon und ohne rote Farbe)
     clicked_button = sac.buttons(
         items=[
             sac.ButtonsItem(label='Alle Verläufe löschen', icon='trash')
@@ -484,7 +508,6 @@ with st.sidebar:
         st.session_state.berater_messages = []
         st.rerun()
     
-    # --- AKQUISE-HAKEN 1: SIDEBAR (Passiv) ---
     st.divider()
     st.markdown(
         """
@@ -495,7 +518,6 @@ with st.sidebar:
         [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
         """
     )
-    # --- ENDE HAKEN 1 ---
 
 
 # --- Initialisierung der Chat-Verläufe (2x) ---
@@ -505,12 +527,11 @@ if "berater_messages" not in st.session_state:
     st.session_state.berater_messages = []
 
 
-# --- sac.tabs (KORRIGIERT: mit icons, ohne Farbe) ---
-# KORREKTUR: align="left" statt "center"
+# --- sac.tabs (Linksbündig) ---
 selected_tab = sac.tabs([
     sac.TabsItem(label='Strategie Berater', icon='robot'),
     sac.TabsItem(label='Allgemeiner Chat', icon='chat-dots'),
-], format_func='title', align='left', return_index=False) # color='' entfernt
+], format_func='title', align='left', return_index=False) 
 # --- ENDE sac.tabs ---
 
 
@@ -527,9 +548,8 @@ if selected_tab == "Allgemeiner Chat":
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # --- KORRIGIERTER AUFRUF (Query Rewriter ist jetzt drin) ---
-        # do_rewrite=True ist der Standard und sorgt für die "schlaue" Suche
-        ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm, do_rewrite=True)
+        # --- NEUER AUFRUF: RAG-Pipeline ---
+        ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
         
         if debug_hits:
             show_hits(ranked_chunks) 
@@ -542,8 +562,6 @@ if selected_tab == "Allgemeiner Chat":
         messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages_for_api.extend(st.session_state.messages) 
 
-        # Diese Logik funktioniert weiterhin, da sie den *originalen* Prompt
-        # aus st.session_state.messages holt.
         if ctx.strip():
             last_user_message = messages_for_api.pop() 
             messages_for_api.append({
@@ -569,8 +587,6 @@ if selected_tab == "Allgemeiner Chat":
 # --- TAB 2: Strategie Berater ---
 if selected_tab == "Strategie Berater":
     st.subheader("Ihr KI-Strategie Berater")
-    
-    # --- LOGIK: Zeige Formular ODER Chat ---
     
     # FALL 1: Das Gespräch hat noch nicht begonnen -> Zeige Formular
     if not st.session_state.berater_messages:
@@ -610,15 +626,13 @@ if selected_tab == "Strategie Berater":
                 "Produktionsdaten (z.B. IoT, Sensoren, BDE)"
             ]
             
-            # --- KORREKTUR: Labels für Multiselect vereinheitlicht ---
             st.markdown("Welche Datenquellen liegen vor? (Mehrfachauswahl)")
             data_sources = st.multiselect(
-                "data_sources_hidden_label", # Eindeutiger Key, Label wird ausgeblendet
+                "data_sources_hidden_label", 
                 data_sources_options,
                 placeholder="Bitte auswählen...",
                 label_visibility="collapsed"
             )
-            # --- ENDE KORREKTUR ---
             
             data_sources_freitext = st.text_input("Andere Datenquellen oder Spezifizierung:", placeholder="z.B. Altes Warenwirtschaftssystem, diverse Access-DBs")
             
@@ -627,15 +641,13 @@ if selected_tab == "Strategie Berater":
                 "Buchhaltung / Finanzen / Controlling", "Produktion / F&E / Dienstleistungserbringung", "IT / Administration", "Logistik / Einkauf / SCM"
             ]
             
-            # --- KORREKTUR: Labels für Multiselect vereinheitlicht ---
             st.markdown("Welche Abteilungen sind im Fokus? (Mehrfachauswahl)")
             departments = st.multiselect(
-                "departments_hidden_label", # Eindeutiger Key
+                "departments_hidden_label", 
                 departments_options,
                 placeholder="Bitte auswählen...",
                 label_visibility="collapsed"
             )
-            # --- ENDE KORREKTUR ---
 
             st.markdown("##### 3. Was ist Ihr Ziel?")
             
@@ -649,20 +661,18 @@ if selected_tab == "Strategie Berater":
                 "Entscheidungsfindung datenbasiert verbessern (z.B. Reports)"
             ]
             
-            # --- KORREKTUR: Labels für Multiselect vereinheitlicht ---
             st.markdown("Was sind Ihre Hauptziele? (Mehrfachauswahl)")
             goals_preselected = st.multiselect(
-                "goals_hidden_label", # Eindeutiger Key
+                "goals_hidden_label", 
                 goals_options,
                 placeholder="Bitte auswählen...",
                 label_visibility="collapsed"
             )
-            # --- ENDE KORREKTUR ---
             
             goals_freitext = st.text_area("Weitere Ziele oder Details:", 
                                           placeholder="z.B. Automatisierung der Rechnungsprüfung, Analyse von Support-Tickets zur Produktverbesserung...")
 
-            st.markdown("---") # Visuelle Trennung
+            st.markdown("---") 
             submit_button = st.form_submit_button("Strategie-Empfehlung generieren", use_container_width=True)
 
         # --- Logik nach dem Absenden des Formulars ---
@@ -684,14 +694,13 @@ if selected_tab == "Strategie Berater":
                     if data_sources_freitext:
                         all_data_sources.append(f"Weitere Details: {data_sources_freitext}")
 
+                    # Der 'mega_prompt' ist jetzt der Input für die Graph-Suche
                     mega_prompt_content = f"""
                     Der Nutzer benötigt eine KI-Implementierungs-Roadmap und Best Practices.
                     Situation des Nutzers:
                     - Unternehmen / Branche: {company_details}
                     - Größe: {company_size}
                     - Relevante Abteilungen: {', '.join(departments) if departments else 'Nicht spezifiziert'}
-                    
-                    --- FEHLERKORREKTUR HIER ---
                     - Vorhandene Datenquellen: {', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
                     - Hauptziele: {', '.join(all_goals)}
                     
@@ -701,10 +710,8 @@ if selected_tab == "Strategie Berater":
                     
                     user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {', '.join(all_goals)}."
                     
-                    # --- KORRIGIERTER AUFRUF (Query Rewriter ist jetzt drin) ---
-                    # Wir überspringen den Rewriter (do_rewrite=False), da der Formular-Prompt
-                    # bereits sehr spezifisch und lang ist.
-                    ctx, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm, do_rewrite=False)
+                    # --- NEUER AUFRUF: RAG-Pipeline ---
+                    ctx, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
 
                     if debug_hits:
                         show_hits(ranked_chunks)
@@ -716,8 +723,6 @@ if selected_tab == "Strategie Berater":
                     
                     messages_for_api = [
                         {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT},
-                        # WICHTIG: Wir senden den *Original* mega_prompt_content,
-                        # nicht den umgeschriebenen, damit das LLM die Details kennt.
                         {"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\nKONTEXT:\n{ctx}"}
                     ]
                     
@@ -735,26 +740,22 @@ if selected_tab == "Strategie Berater":
     
     # FALL 2: Das Gespräch läuft bereits -> Zeige Chat-Verlauf und Eingabefeld
     else:
-        # Anzeigen des Berater-Chat-Verlaufs
         for i, message in enumerate(st.session_state.berater_messages):
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
                 
-                # --- AKQUISE-HAKEN 2: KORREKTUR zu st.link_button ---
-                if message["role"] == "assistant" and i == 1: # i==1 ist die erste Antwort (nach der User-Formular-Message)
+                if message["role"] == "assistant" and i == 1: 
                     st.divider()
                     st.markdown("**War diese Erstanalyse hilfreich?**")
                     st.markdown("Eine automatisierte Analyse kann einen persönlichen Workshop nicht ersetzen. Wenn Sie diese Roadmap und Methoden konkret umsetzen möchten, lassen Sie uns sprechen.")
                     
-                    # --- KORREKTUR (Button deutlicher machen) ---
                     st.link_button(
                         label="📅 Kostenloses Erstgespräch buchen", 
                         url="https://calendar.app.google/kemaHAmTcqB2k5bE9",
                         use_container_width=True,
-                        type="primary" # NEU: Macht den Button gefüllt (rot)
+                        type="primary" 
                     )
                     st.divider()
-                # --- ENDE HAKEN 2 ---
 
         # Chat-Eingabefeld für FOLGEFRAGEN
         if prompt := st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie..."):
@@ -762,9 +763,8 @@ if selected_tab == "Strategie Berater":
             st.chat_message("user").markdown(prompt)
             st.session_state.berater_messages.append({"role": "user", "content": prompt})
 
-            # --- KORRIGIERTER AUFRUF (Query Rewriter ist jetzt drin) ---
-            # do_rewrite=True ist der Standard und sorgt für die "schlaue" Suche
-            ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm, do_rewrite=True)
+            # --- NEUER AUFRUF: RAG-Pipeline ---
+            ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
             
             if debug_hits:
                 show_hits(ranked_chunks) 
@@ -777,8 +777,6 @@ if selected_tab == "Strategie Berater":
             messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
             messages_for_api.extend(st.session_state.berater_messages) 
 
-            # Diese Logik funktioniert weiterhin, da sie den *originalen* Prompt
-            # aus st.session_state.berater_messages holt.
             if ctx.strip():
                 last_user_message = messages_for_api.pop() 
                 messages_for_api.append({
