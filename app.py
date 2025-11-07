@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.8: KeyError-Fix)
+# Streamlit RAG (VERSION 31.9: Klickbare Themen-Buttons)
 from __future__ import annotations
 
 import os, re, json
@@ -882,25 +882,45 @@ if selected_tab == "Strategie Berater":
                     )
                     st.divider()
         
-        # --- NEU: Verwandte Themen anzeigen (NACH der Schleife) ---
+        # --- NEU: Verwandte Themen als klickbare Buttons ---
+        clicked_topic = None
         if st.session_state.related_topics:
             with st.chat_message("assistant", avatar="🤖"):
                 st.markdown("**Themen, in denen Ihre Problematik ebenfalls angesprochen wird (Best Practices):**")
+                st.markdown("Klicken Sie auf ein Thema, um mehr zu erfahren:")
                 
-                # Zeigt die Themen als klickbare "Tags" an
-                topics_md = " ".join([f"`{t}`" for t in st.session_state.related_topics])
-                st.info(f"Fragen Sie mich bei Interesse gerne nach: {topics_md}")
-            
-            # Themen nur einmal anzeigen
-            st.session_state.related_topics = []
+                # Kopie der Themen für die Buttons erstellen
+                topics_to_display = st.session_state.related_topics[:]
+                
+                # Den State *vor* dem Anzeigen der Buttons leeren
+                st.session_state.related_topics = [] 
+                
+                clicked_topic = sac.buttons(
+                    items=[sac.ButtonsItem(label=t) for t in topics_to_display],
+                    format_func='label',
+                    variant='outline', 
+                    size='small',
+                    color='gray',
+                    index=None,
+                    return_index=False 
+                )
 
-        # Chat-Eingabefeld für FOLGEFRAGEN
-        if prompt := st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie..."):
+        # --- KORRIGIERTE LOGIK: Kombiniertes Input-Handling ---
+        prompt_input = st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie...")
+        
+        # Priorisiere den Button-Klick. Wenn geklickt, wird die Texteingabe ignoriert.
+        if clicked_topic:
+            prompt = clicked_topic
+        else:
+            prompt = prompt_input
+        
+        # Führe die Logik nur aus, wenn ein Prompt vorhanden ist (entweder Klick oder Tippen)
+        if prompt: 
             
             st.chat_message("user").markdown(prompt)
             st.session_state.berater_messages.append({"role": "user", "content": prompt})
 
-            # --- ÄNDERUNG: 'related_topics' wird empfangen ---
+            # --- RAG-Pipeline für BEIDE Input-Arten ---
             ctx, ranked_chunks, related_topics = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
             
             if debug_hits:
@@ -933,7 +953,7 @@ if selected_tab == "Strategie Berater":
                 st.chat_message("assistant").markdown(answer)
                 st.session_state.berater_messages.append({"role": "assistant", "content": answer})
                 
-                # --- NEU: Verwandte Themen im Session State speichern ---
+                # Speichere die NEUEN Themen für den nächsten Durchlauf
                 st.session_state.related_topics = related_topics
                 st.rerun() 
 
