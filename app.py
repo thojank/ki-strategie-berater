@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.1: HYBRID GRAPH RAG - ki_strat_* Tabellen)
+# Streamlit RAG (VERSION 31.2: HYBRID GRAPH RAG - SQL-Fix + CSS-Fix)
 from __future__ import annotations
 
 import os, re, json
@@ -52,13 +52,13 @@ else:
 
 # System Prompt für den Chat
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
-Du bist ein hilfreicher Assistent. Deine Aufgabe ist es, die Fragen des Nutzers ausschließlich auf Basis des untenstehenden KONTEXTS zu beantworten.
-- Antworte präzise und halte dich strikt an die Informationen im KONTEXT.
-- ES IST ABSOLUT VERBOTEN, WISSEN AUSSERHALB DES KONTEXTS ZU VERWENDEN.
-- Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
+DEINE WICHTIGSTE REGEL: Du darfst unter KEINEN UMSTÄNDEN Wissen außerhalb des bereitgestellten KONTEXTS verwenden.
+- Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden." Es gibt keine Ausnahmen.
+- Wenn KONTEXT vorhanden ist: Beantworte die Frage des Nutzers präzise und ausschließlich auf Basis dieses KONTEXTS.
 - Antworte auf Deutsch.
-- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, die du verwendet hast, falls der Kontext genutzt wurde.
-- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich.
+- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, falls der Kontext genutzt wurde.
+- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich (dies ist die EINZIGE Ausnahme, bei der du ohne Kontext antworten darfst).
+- ERINNERUNG: Wenn die Frage spezifisch ist und der KONTEXT leer ist, lautet die ANTWORT IMMER: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
 """)
 
 # System-Prompt für den Berater (ANGEPASST FÜR AKQUISE)
@@ -107,7 +107,7 @@ st.set_page_config(
 st.title("KI-Strategie Berater") 
 st.sidebar.image("ciferecigo.png", width=200)
 
-# --- CSS-HACK (Angepasst für Chat-Input) ---
+# --- CSS-HACK (KORRIGIERT FÜR CHAT-INPUT) ---
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
@@ -158,15 +158,23 @@ st.markdown(f"""
         font-weight: bold;
     }}
 
-    /* --- NEU: Roter Rand für Chat-Eingabefeld (Suchschlitz) --- */
-    [data-testid="stChatInput"] div[data-baseweb="input"] {{
-        border-color: #ea3323 !important; /* Rote Farbe (primaryColor) */
-        border-width: 1px !important;     /* Stellt sicher, dass der Rand sichtbar ist */
-        border-style: solid !important;  
+    /* --- KORREKTUR: Roter Rand für Chat-Eingabefeld (Suchschlitz) --- */
+    /* Wir stylen den äußeren Container */
+    div[data-testid="stChatInput"] {{
+        border: 1px solid #ea3323 !important;
+        border-radius: 0.5rem !important; /* Passt zum Streamlit-Stil */
+        background-color: #FFFFFF; /* Stellt sicher, dass der Hintergrund weiß ist */
     }}
-    
-    /* Optional: Roter "Glow" beim Klicken (ersetzt den blauen Standard) */
-    [data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
+
+    /* Wir entfernen den inneren Rand, um Dopplungen zu vermeiden */
+    div[data-testid="stChatInput"] div[data-baseweb="input"] {{
+         border: none !important;
+         box-shadow: none !important;
+         background-color: transparent !important;
+    }}
+
+    /* Roter "Glow" beim Klicken */
+    div[data-testid="stChatInput"]:focus-within {{
         border-color: #ea3323 !important;
         box-shadow: 0 0 0 2px #ea332333 !important; /* Heller roter Schatten */
     }}
@@ -236,23 +244,26 @@ def extract_entities_from_prompt(prompt: str, model: str) -> List[str]:
         st.warning(f"Fehler bei Entitäts-Extraktion: {e}. Nutze leere Liste.")
         return []
 
-# --- KORREKTUR: Graph-Abfrage mit STANDARD SQL & neuen Tabellennamen ---
+# --- KORREKTUR: Graph-Abfrage (sucht jetzt Source UND Target) ---
 @st.cache_data(show_spinner="[Graph] Suche relevante Chunks...")
 def query_graph_for_chunks(entities: List[str]) -> List[str]:
     """ 
     Frägt die SQL-Graph-Tabellen nach Chunks ab.
     Gibt eine Liste von Chunk-IDs zurück.
+    
+    KORREKTUR: Sucht jetzt nach Entitäten auf BEIDEN Seiten 
+    (source_node_id UND target_node_id).
     """
     if not entities:
         return []
         
     chunk_ids = set()
     
-    # Standard SQL JOIN-Abfrage
+    # KORRIGIERTE Standard SQL JOIN-Abfrage
     query = f"""
     SELECT DISTINCT e.chunk_id
     FROM public.ki_strat_edges AS e
-    JOIN public.ki_strat_nodes AS n ON e.source_node_id = n.id
+    JOIN public.ki_strat_nodes AS n ON (e.source_node_id = n.id OR e.target_node_id = n.id)
     WHERE n.name = ANY(%s);
     """
 
