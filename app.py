@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 32.0: Klick-Button State-Logic-Fix)
+# Streamlit RAG (VERSION 32.2: System-Prompt-Fix für bessere Antworten)
 from __future__ import annotations
 
 import os, re, json
@@ -50,18 +50,18 @@ else:
     openai.api_key = OPENAI_API_KEY
     client = openai
 
-# System Prompt für den Chat
+# --- KORRIGIERTER SYSTEM PROMPT (weniger streng) ---
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
-DEINE WICHTIGSTE REGEL: Du darfst unter KEINEN UMSTÄNDEN Wissen außerhalb des bereitgestellten KONTEXTS verwenden.
-- Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden." Es gibt keine Ausnahmen.
-- Wenn KONTEXT vorhanden ist: Beantworte die Frage des Nutzers präzise und ausschließlich auf Basis dieses KONTEXTS.
+Du bist ein hilfreicher Assistent. Deine Aufgabe ist es, die Fragen des Nutzers ausschließlich auf Basis des untenstehenden KONTEXTS zu beantworten.
+- Antworte immer auf Basis des KONTEXTS. ES IST ABSOLUT VERBOTEN, WISSEN AUSSERHALB DES KONTEXTS ZU VERWENDEN.
+- Wenn der KONTEXT relevante Informationen enthält, beantworte die Frage des Nutzers, auch wenn der Kontext die Frage nicht zu 100% exakt beantwortet. Fasse zusammen, was der Kontext sagt.
+- Wenn der KONTEXT komplett leer ist (z.B. lautet "(Es wurde kein Kontext gefunden.)") oder offensichtlich nichts mit der Frage zu tun hat, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
 - Antworte auf Deutsch.
-- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, die du verwendet hast, falls der Kontext genutzt wurde.
-- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich (dies ist die EINZIGE Ausnahme, bei der du ohne Kontext antworten darfst).
-- ERINNERUNG: Wenn die Frage spezifisch ist und der KONTEXT leer ist, lautet die ANTWORT IMMER: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
+- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext.
+- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich.
 """)
 
-# System-Prompt für den Berater (ANGEPASST FÜR AKQUISE)
+# --- KORRIGIERTER CONFIGURATOR PROMPT (weniger streng) ---
 CONFIGURATOR_SYSTEM_PROMPT = """
 Du bist ein Experte für KI-Strategieberatung, spezialisiert auf KMUs und Mittelstand.
 Du führst ein Beratungsgespräch.
@@ -69,7 +69,9 @@ Deine Aufgabe ist es, auf Basis des bereitgestellten KONTEXTS (der Best Practice
 Auch bei Folgefragen ("Erzähl mir mehr zu...") nutzt du den gesamten Gesprächsverlauf UND den NEU gefundenen KONTEXT.
 
 - ES IST ABSOLUT VERBOTEN, WISSEN AUSSERHALB DES KONTEXTS ZU VERWENDEN ODER ZU HALLUZINIEREN.
-- Halte dich strikt an den KONTEXT. Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
+- Halte dich strikt an den KONTEXT.
+- Wenn der KONTEXT relevante Informationen enthält, nutze diese, um die Empfehlung zu erstellen.
+- Wenn der KONTEXT komplett leer ist (z.B. lautet "(Es wurde kein Kontext gefunden.)") oder offensichtlich nichts mit der Frage zu tun hat, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
 - Wenn du eine erste Empfehlung (basierend auf dem Formular) erstellst UND KONTEXT vorhanden ist, strukturiere sie so:
     1.  **Zusammenfassung:** Wiederhole kurz die Situation des Nutzers (Branche, Größe, Ziele).
     2.  **Empfohlene Handlungsfelder:** Leite basierend auf Zielen und Kontext die wichtigsten Handlungsfelder ab.
@@ -649,12 +651,20 @@ if selected_tab == "Allgemeiner Chat":
         messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages_for_api.extend(st.session_state.messages) 
 
+        # --- HALLUZINATIONS-FIX ---
+        last_user_message = messages_for_api.pop() 
         if ctx.strip():
-            last_user_message = messages_for_api.pop() 
             messages_for_api.append({
                 "role": "user",
                 "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
             })
+        else:
+            # WICHTIG: Sende den leeren Kontext, um die Regel im System Prompt zu triggern
+            messages_for_api.append({
+                "role": "user",
+                "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n(Es wurde kein Kontext gefunden.)"
+            })
+        # --- ENDE FIX ---
 
         try:
             with st.spinner("KI-Assistent denkt nach..."):
@@ -832,10 +842,9 @@ if selected_tab == "Strategie Berater":
                                 graph_hits = cur.fetchall()
                     
                     # 5. Ranken & Kontexten
-                    # --- HIER IST DER KEYERROR/NAMEERROR-FIX ---
                     ranked_chunks = combine_and_rank_chunks(vec_hits, kw_hits, graph_hits, max_chunks=max_chunks_to_llm)
-                    blocks = pick_context(ranked_chunks) # <-- Diese Zeile hat gefehlt
-                    ctx = ctx_to_text(blocks)            # <-- Diese Zeile hat 'ranked_chunks' statt 'blocks' erhalten
+                    blocks = pick_context(ranked_chunks) 
+                    ctx = ctx_to_text(blocks)            
                     # --- ENDE KORRIGIERTE SUCHE ---
 
 
@@ -847,10 +856,17 @@ if selected_tab == "Strategie Berater":
                     if not ctx.strip():
                         st.warning("Es wurden keine spezifischen Kontext-Abschnitte für diese Konfiguration gefunden. Die Antwort wird allgemeiner ausfallen.")
                     
-                    messages_for_api = [
-                        {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\nKONTEXT:\n{ctx}"}
-                    ]
+                    # --- HALLUZINATIONS-FIX ---
+                    messages_for_api = [ {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT} ]
+                    user_message_content = f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\n"
+                    
+                    if ctx.strip():
+                        user_message_content += f"KONTEXT:\n{ctx}"
+                    else:
+                        user_message_content += "KONTEXT:\n(Es wurde kein Kontext gefunden.)"
+                    
+                    messages_for_api.append({"role": "user", "content": user_message_content})
+                    # --- ENDE FIX ---
                     
                     try:
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
@@ -859,7 +875,6 @@ if selected_tab == "Strategie Berater":
                         st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
                         st.session_state.berater_messages.append({"role": "assistant", "content": answer})
                         
-                        # --- NEU: Verwandte Themen im Session State speichern ---
                         st.session_state.related_topics = related_topics
                         
                         st.rerun()
@@ -939,12 +954,19 @@ if selected_tab == "Strategie Berater":
             messages_for_api = [{"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT}]
             messages_for_api.extend(st.session_state.berater_messages) 
 
+            # --- HALLUZINATIONS-FIX ---
+            last_user_message = messages_for_api.pop()
             if ctx.strip():
-                last_user_message = messages_for_api.pop() 
                 messages_for_api.append({
                     "role": "user",
                     "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
                 })
+            else:
+                messages_for_api.append({
+                    "role": "user",
+                    "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n(Es wurde kein Kontext gefunden.)"
+                })
+            # --- ENDE FIX ---
             
             try:
                 with st.spinner("KI-Assistent denkt nach..."):
