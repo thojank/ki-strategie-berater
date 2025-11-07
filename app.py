@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 32.2: System-Prompt-Fix für bessere Antworten)
+# Streamlit RAG (VERSION 32.3: Nativer st.tabs Wechsel & finale CSS-Fixes)
 from __future__ import annotations
 
 import os, re, json
@@ -50,18 +50,18 @@ else:
     openai.api_key = OPENAI_API_KEY
     client = openai
 
-# --- KORRIGIERTER SYSTEM PROMPT (weniger streng) ---
+# System Prompt für den Chat
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
-Du bist ein hilfreicher Assistent. Deine Aufgabe ist es, die Fragen des Nutzers ausschließlich auf Basis des untenstehenden KONTEXTS zu beantworten.
-- Antworte immer auf Basis des KONTEXTS. ES IST ABSOLUT VERBOTEN, WISSEN AUSSERHALB DES KONTEXTS ZU VERWENDEN.
-- Wenn der KONTEXT relevante Informationen enthält, beantworte die Frage des Nutzers, auch wenn der Kontext die Frage nicht zu 100% exakt beantwortet. Fasse zusammen, was der Kontext sagt.
-- Wenn der KONTEXT komplett leer ist (z.B. lautet "(Es wurde kein Kontext gefunden.)") oder offensichtlich nichts mit der Frage zu tun hat, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
+DEINE WICHTIGSTE REGEL: Du darfst unter KEINEN UMSTÄNDEN Wissen außerhalb des bereitgestellten KONTEXTS verwenden.
+- Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann (z.B. der Kontext lautet "(Es wurde kein Kontext gefunden.)"), MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden." Es gibt keine Ausnahmen.
+- Wenn KONTEXT vorhanden ist: Beantworte die Frage des Nutzers präzise und ausschließlich auf Basis dieses KONTEXTS.
 - Antworte auf Deutsch.
-- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext.
-- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich.
+- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, falls der Kontext genutzt wurde.
+- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich (dies ist die EINZIGE Ausnahme, bei der du ohne Kontext antworten darfst).
+- ERINNERUNG: Wenn die Frage spezifisch ist und der KONTEXT leer ist, lautet die ANTWORT IMMER: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
 """)
 
-# --- KORRIGIERTER CONFIGURATOR PROMPT (weniger streng) ---
+# System-Prompt für den Berater (ANGEPASST FÜR AKQUISE)
 CONFIGURATOR_SYSTEM_PROMPT = """
 Du bist ein Experte für KI-Strategieberatung, spezialisiert auf KMUs und Mittelstand.
 Du führst ein Beratungsgespräch.
@@ -150,49 +150,34 @@ st.markdown(f"""
         padding-left: 0.5rem; 
     }}
     
-    /* 4. Tab-Styling (JETZT MIT NEUER SCHRIFTART) */
-    .sac-tabs-bar {{
-        border-bottom: 2px solid #DDDDDD !important; 
-    }}
-    .sac-tabs-item {{
-        font-family: 'Lexend Exa', sans-serif !important; /* HIER PASSIERT ES */
-        font-weight: 700 !important;
-        background-color: #EAEAEA !important; 
-        border-radius: 0.25rem 0.25rem 0 0 !important; 
-        margin-bottom: -2px !important; 
-        border: 1px solid #DDDDDD !important; 
-        border-bottom: none !important;
-    }}
-    
-    /* 5. Aktiver Tab (Farbe wird jetzt über Python gesteuert) */
-    .sac-tabs-item-active {{
-        font-family: 'Lexend Exa', sans-serif !important; /* HIER PASSIERT ES */
-        font-weight: 700 !important;
-        color: #FFFFFF !important; /* Weiße Schrift (Kontrast zu Rot) */
-        border: 2px solid #ea3323 !important;  
-        border-bottom: 2px solid #FAFAFA !important; /* Schneidet Linie mit BG-Farbe */
+    /* 4. Tab-Styling (JETZT NATIV, CSS ENTFERNT) */
+    /* st.tabs erbt die Schriftart von headingFont aus config.toml */
+    /* Wir färben nur den aktiven Tab-Rand rot */
+    [data-testid="stTabs"] button[aria-selected="true"] {{
+        border-bottom: 2px solid #ea3323 !important;
+        color: #ea3323 !important;
     }}
 
-    /* 6. Suchschlitz-Rand (FINALER FOKUS-FIX) */
-    
-    /* Mache den äußeren Container unsichtbar */
+    /* 5. Suchschlitz-Rand (FINALER FOKUS-FIX) */
     div[data-testid="stChatInput"] {{
         border: none !important;
         background-color: transparent !important;
     }}
-
-    /* Style den inneren Input direkt */
     div[data-testid="stChatInput"] div[data-baseweb="input"] {{
          border: 1px solid #ea3323 !important; /* Roter Rand */
          border-radius: 0.5rem !important; /* Runde Ecken */
          background-color: #FFFFFF !important;
          box-shadow: none !important; /* Entferne Standard-Schatten */
     }}
-
-    /* Roter "Glow" beim Klicken (auf dem inneren Input) */
     div[data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
         border-color: #ea3323 !important;
         box-shadow: 0 0 0 2px #ea332333 !important; /* Heller roter Schatten */
+    }}
+    
+    /* 6. NEU: Schriftart für SAC-Buttons korrigieren */
+    .sac-buttons-item button {{
+        font-family: 'Lexend Exa', sans-serif !important; 
+        font-weight: 700 !important; 
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -619,16 +604,12 @@ if "topics_to_display" not in st.session_state:
     st.session_state.topics_to_display = []
 
 
-# --- sac.tabs (Linksbündig + FARBIG) ---
-selected_tab = sac.tabs([
-    sac.TabsItem(label='Strategie Berater', icon='robot'),
-    sac.TabsItem(label='Allgemeiner Chat', icon='chat-dots'),
-], format_func='title', align='left', return_index=False, color="#ea3323") # Rote Farbe hier
-# --- ENDE sac.tabs ---
+# --- KORREKTUR: Wechsel zu nativem st.tabs ---
+tab_berater, tab_chat = st.tabs(["🤖 Strategie Berater", "💬 Allgemeiner Chat"])
 
 
-# --- TAB 1: Chat ---
-if selected_tab == "Allgemeiner Chat":
+# --- TAB 1: Chat (NEUE STRUKTUR) ---
+with tab_chat:
     st.subheader("Allgemeiner Chat mit Gedächtnis")
     
     for message in st.session_state.messages:
@@ -684,8 +665,8 @@ if selected_tab == "Allgemeiner Chat":
         except Exception as e:
             st.error(f"Fehler bei der OpenAI ChatCompletion API: {e}")
 
-# --- TAB 2: Strategie Berater ---
-if selected_tab == "Strategie Berater":
+# --- TAB 2: Strategie Berater (NEUE STRUKTUR) ---
+with tab_berater:
     # st.subheader() wendet 'headingFont' an
     st.subheader("Ihr KI-Strategie Berater")
     
@@ -978,7 +959,7 @@ if selected_tab == "Strategie Berater":
                         answer = res.choices[0].message.content
                     else:
                         res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
-                        answer = res['choices'][0]['message']['content']
+                        answer = res['choices[0]['message']['content']
                 
                 st.chat_message("assistant").markdown(answer)
                 st.session_state.berater_messages.append({"role": "assistant", "content": answer})
