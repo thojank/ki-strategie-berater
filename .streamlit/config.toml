@@ -1,44 +1,46 @@
 [theme]
 # Basis-Theme
 base = "light"
+
+# Schriften (wie von Ihnen zuletzt bereitgestellt)
 font = "'Scope One':https://fonts.googleapis.com/css2?family=Scope+One&display=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
-# --- Distinguiertes Farbschema (Mauve/Beige) ---
+# --- Klares Schema mit Gelb-Akzent ---
 
-# Primärfarbe (Mauve für Buttons, Highlights)
-primaryColor = "#8C7D8C" # Muted Mauve
+# Primärfarbe (Ihr sattes Gelb für "Schwung")
+primaryColor = "#f6c850"
 
-# Hintergrundfarben (Beige-Töne)
-backgroundColor = "#FAF9F6"           # Sehr helles Beige / Off-White
-secondaryBackgroundColor = "#EAE6E1"  # Helleres Mauve-Beige (für Widgets)
+# Hintergrundfarben (Sehr klar)
+backgroundColor = "#FFFFFF"           # Reinweiß für maximalen Kontrast
+secondaryBackgroundColor = "#F0F2F6"  # Sehr helles, klares Grau (für Widgets)
 
-# Textfarbe (Dunkles Mauve-Grau statt Schwarz)
-textColor = "#4A444B"
+# Textfarbe (Sehr klar)
+textColor = "#222222"                 # Sehr dunkles Grau (fast schwarz)
 
-# Link-Farbe (Dunkleres, klares Mauve)
-linkColor = "#6D5A6D"
+# Link-Farbe (Nutzt das Gelb, aber dunkler für Lesbarkeit)
+linkColor = "#D4A01A" # Abgedunkeltes Gelb für Kontrast
 
-# Code-Hintergrund (Subtiler Beige-Ton)
-codeBackgroundColor = "#EFEBE6"
+# Code-Hintergrund (Klar und neutral)
+codeBackgroundColor = "#F5F5F5"
 
 # Schriftgröße
 baseFontSize = 16
 
-# Elegante = leichte Rundungen
+# Ecken (Leicht abgerundet bleibt "sauber")
 baseRadius = "0.25rem"
 
-# Border-Einstellungen (Subtiles Mauve-Grau)
-borderColor = "#D1C9D1"
+# Border-Einstellungen (Subtil und klar)
+borderColor = "#DDDDDD"
 
 
 [theme.sidebar]
-# Sidebar soll sich elegant einfügen
-backgroundColor = "#EAE6E1"           # Helleres Mauve-Beige (Haupt-Sidebar)
-secondaryBackgroundColor = "#FAF9F6"   # Off-White (Widgets in der Sidebar)
-primaryColor = "#8C7D8C"             # Muted Mauve (wie Hauptseite)
-textColor = "#4A444B"                 # Dunkles Mauve-Grau (wie Hauptseite)
-borderColor = "#D1C9D1"            # Subtiles Mauve-Grau
+# Sidebar (hell und klar, um nicht abzulenken)
+backgroundColor = "#FAFAFA"           # Sehr helles Grau (fast weiß)
+secondaryBackgroundColor = "#FFFFFF"   # Widgets in der Sidebar (weiß)
+primaryColor = "#f6c850"             # Gelb für Akzente
+textColor = "#222222"                 # Dunkler Text
+borderColor = "#DDDDDD"            # Subtile Trennlinie
 
 [server]
 # Wichtig: Damit die App ohne Warnungen läuft
