@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.6: Branding + Formular-Logik-Fix)
+# Streamlit RAG (VERSION 31.7: NameError-Fix)
 from __future__ import annotations
 
 import os, re, json
@@ -829,7 +829,8 @@ if selected_tab == "Strategie Berater":
                                 graph_hits = cur.fetchall()
                     
                     # 5. Ranken & Kontexten
-                    ranked_chunks = combine_and_rank_chunks(vec_hits, kw_hits, graph_hits, max_chunks=max_chunks)
+                    # --- HIER IST DER NAMEERROR-FIX ---
+                    ranked_chunks = combine_and_rank_chunks(vec_hits, kw_hits, graph_hits, max_chunks=max_chunks_to_llm)
                     ctx = ctx_to_text(ranked_chunks)
                     # --- ENDE KORRIGIERTE SUCHE ---
 
