@@ -119,6 +119,7 @@ st.title("KI-Strategie Berater") # st.title wird zu <h1>
 st.sidebar.image("ciferecigo.png", width=200) # Lokales Bild
 
 # --- CSS-HACK (Minimal & Pragmatisch) ---
+# KORREKTUR: CSS-Block massiv erweitert für UI-Fixes
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
@@ -132,7 +133,47 @@ st.markdown(f"""
         padding-left: 3rem;
         padding-right: 3rem;
     }}
-    /* Die Ränder werden jetzt von config.toml gesteuert */
+    
+    /* --- NEUE KORREKTUREN (Ihre UI-Wünsche) --- */
+
+    /* 1. Formular-Rahmen entfernen */
+    [data-testid="stForm"] {{
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+    }}
+
+    /* 2. Dropdown-Rahmen (Selectbox) HINZUFÜGEN */
+    [data-testid="stSelectbox"] > div {{
+        border: 1px solid #DDDDDD !important; 
+        border-radius: 0.25rem; /* Matcht config.toml baseRadius */
+    }}
+    /* 2b. Auch für Multiselect */
+    [data-testid="stMultiSelect"] {{
+        border: 1px solid #DDDDDD !important;
+        border-radius: 0.25rem;
+    }}
+    
+    /* 3. Reiter (sac.tabs) sichtbarer machen (Ordner-Look) */
+    .sac-tabs-bar {{
+        border-bottom: 2px solid #DDDDDD !important; /* Linie unter den Tabs */
+    }}
+    .sac-tabs-item {{
+        background-color: #F0F2F6 !important; /* Inaktive Tabs (hellgrau) */
+        border-radius: 0.25rem 0.25rem 0 0 !important; /* Oben rund */
+        margin-bottom: -2px !important; /* Überlappt die untere Linie */
+        border: 1px solid #DDDDDD !important;
+        border-bottom: none !important;
+    }}
+    .sac-tabs-item-active {{
+        background-color: #FFFFFF !important; /* Aktiver Tab (weiß) */
+        border: 2px solid #DDDDDD !important;
+        border-bottom: 2px solid #FFFFFF !important; /* "Schneidet" die Linie */
+        color: #ea3323 !important; /* Rote Schrift (primaryColor) */
+        font-weight: bold;
+    }}
+    /* --- ENDE NEUE KORREKTUREN --- */
+
     </style>
     """, unsafe_allow_html=True)
 # --- ENDE CSS-HACK ---
@@ -664,11 +705,13 @@ if selected_tab == "Strategie Berater":
                     st.divider()
                     st.markdown("**War diese Erstanalyse hilfreich?**")
                     st.markdown("Eine automatisierte Analyse kann einen persönlichen Workshop nicht ersetzen. Wenn Sie diese Roadmap und Methoden konkret umsetzen möchten, lassen Sie uns sprechen.")
-                    # st.link_button wird die neue Primärfarbe (aus config.toml) annehmen
+                    
+                    # --- KORREKTUR (Button deutlicher machen) ---
                     st.link_button(
-                        label="Kostenloses Erstgespräch buchen", 
+                        label="📅 Kostenloses Erstgespräch buchen", 
                         url="https://calendar.app.google/kemaHAmTcqB2k5bE9",
-                        use_container_width=True
+                        use_container_width=True,
+                        type="primary" # NEU: Macht den Button gefüllt (rot)
                     )
                     st.divider()
                 # --- ENDE HAKEN 2 ---
