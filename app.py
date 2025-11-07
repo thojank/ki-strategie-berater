@@ -107,7 +107,7 @@ st.set_page_config(
 st.title("KI-Strategie Berater") 
 st.sidebar.image("ciferecigo.png", width=200)
 
-# --- CSS-HACK (Unverändert) ---
+# --- CSS-HACK (Angepasst für Chat-Input) ---
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
@@ -156,6 +156,19 @@ st.markdown(f"""
         border-bottom: 2px solid #FFFFFF !important; 
         color: #ea3323 !important; 
         font-weight: bold;
+    }}
+
+    /* --- NEU: Roter Rand für Chat-Eingabefeld (Suchschlitz) --- */
+    [data-testid="stChatInput"] div[data-baseweb="input"] {{
+        border-color: #ea3323 !important; /* Rote Farbe (primaryColor) */
+        border-width: 1px !important;     /* Stellt sicher, dass der Rand sichtbar ist */
+        border-style: solid !important;  
+    }}
+    
+    /* Optional: Roter "Glow" beim Klicken (ersetzt den blauen Standard) */
+    [data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
+        border-color: #ea3323 !important;
+        box-shadow: 0 0 0 2px #ea332333 !important; /* Heller roter Schatten */
     }}
     </style>
     """, unsafe_allow_html=True)
