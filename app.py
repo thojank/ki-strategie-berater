@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.2: HYBRID GRAPH RAG - SQL-Fix + CSS-Fix)
+# Streamlit RAG (VERSION 31.3: HYBRID GRAPH RAG + VERWANDTE THEMEN)
 from __future__ import annotations
 
 import os, re, json
@@ -159,7 +159,6 @@ st.markdown(f"""
     }}
 
     /* --- KORREKTUR: Roter Rand für Chat-Eingabefeld (Suchschlitz) --- */
-    /* Wir stylen den äußeren Container */
     div[data-testid="stChatInput"] {{
         border: 1px solid #ea3323 !important;
         border-radius: 0.5rem !important; /* Passt zum Streamlit-Stil */
@@ -250,16 +249,12 @@ def query_graph_for_chunks(entities: List[str]) -> List[str]:
     """ 
     Frägt die SQL-Graph-Tabellen nach Chunks ab.
     Gibt eine Liste von Chunk-IDs zurück.
-    
-    KORREKTUR: Sucht jetzt nach Entitäten auf BEIDEN Seiten 
-    (source_node_id UND target_node_id).
     """
     if not entities:
         return []
         
     chunk_ids = set()
     
-    # KORRIGIERTE Standard SQL JOIN-Abfrage
     query = f"""
     SELECT DISTINCT e.chunk_id
     FROM public.ki_strat_edges AS e
@@ -268,12 +263,12 @@ def query_graph_for_chunks(entities: List[str]) -> List[str]:
     """
 
     try:
-        with connect_db() as conn: # Wir nutzen die normale connect_db Funktion
+        with connect_db() as conn: 
             with conn.cursor() as cur:
                 cur.execute(query, (entities,))
                 results = cur.fetchall()
                 for row in results:
-                    chunk_ids.add(str(row[0])) # Konvertiere UUID/ID zu String
+                    chunk_ids.add(str(row[0])) 
                     
         with st.sidebar.expander("Graph-Suchtreffer (Debug)", expanded=False):
             st.write(f"Graph lieferte {len(chunk_ids)} Chunk-IDs:", chunk_ids)
@@ -282,6 +277,44 @@ def query_graph_for_chunks(entities: List[str]) -> List[str]:
         
     except Exception as e:
         st.warning(f"Fehler bei SQL-Graph-Abfrage: {e}")
+        return []
+
+# --- NEU: Funktion zum Finden verwandter Themen ---
+@st.cache_data(show_spinner="[Graph] Finde verwandte Themen...")
+def get_related_topics_from_graph(entities: List[str]) -> List[str]:
+    """
+    Findet Knoten, die mit den extrahierten Entitäten verbunden sind,
+    um "Best Practices" oder "Verwandte Themen" vorzuschlagen.
+    """
+    if not entities:
+        return []
+    
+    # Query:
+    # 1. Finde Knoten (n1) für die Entitäten, nach denen der User gefragt hat.
+    # 2. Folge Kanten (e) zu *anderen* Knoten (n2).
+    # 3. Gib die Namen dieser *anderen* Knoten (n2.name) zurück.
+    # 4. Stelle sicher, dass wir nicht die ursprünglichen Entitäten selbst zurückgeben.
+    query = """
+    SELECT DISTINCT n2.name
+    FROM public.ki_strat_nodes AS n1
+    JOIN public.ki_strat_edges AS e ON (n1.id = e.source_node_id OR n1.id = e.target_node_id)
+    JOIN public.ki_strat_nodes AS n2 ON (n2.id = e.target_node_id OR n2.id = e.source_node_id)
+    WHERE 
+        n1.name = ANY(%s) 
+        AND n2.name != n1.name
+        AND n2.name NOT IN (SELECT unnest(%s))
+    LIMIT 5;
+    """
+    
+    try:
+        with connect_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (entities, entities)) # Liste wird 2x übergeben
+                results = cur.fetchall()
+                related_topics = [row[0] for row in results]
+                return related_topics
+    except Exception as e:
+        st.warning(f"Fehler bei Graph-Themen-Suche: {e}")
         return []
 
 
@@ -424,19 +457,24 @@ def ctx_to_text(blocks: List[Dict]) -> str:
 # ------------------------------------------------------------------------------
 # Generische RAG-Pipeline (HYBRID: SQL-GRAPH + VEKTOR + KEYWORD)
 # ------------------------------------------------------------------------------
-def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> Tuple[str, List[Dict]]:
+# --- ÄNDERUNG: Gibt jetzt auch 'related_topics' zurück ---
+def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> Tuple[str, List[Dict], List[str]]:
     """
     Führt die gesamte HYBRID-RAG-Pipeline aus:
     1. Entitäts-Extraktion -> SQL-Graph-Suche (holt Chunk-IDs)
-    2. Embedding -> Vektorsuche
-    3. Keyword-Suche
-    4. Ranking (Graph-Treffer haben Prio) -> Kontext-Erstellung.
-    Gibt (kontext_string, ranked_chunks) zurück.
+    2. Graph-Suche nach verwandten Themen
+    3. Embedding -> Vektorsuche
+    4. Keyword-Suche
+    5. Ranking (Graph-Treffer haben Prio) -> Kontext-Erstellung.
+    Gibt (kontext_string, ranked_chunks, related_topics) zurück.
     """
     
     # --- SCHRITT 1: GRAPH-SUCHE ---
     entities = extract_entities_from_prompt(prompt, model=chat_model)
     graph_chunk_ids = query_graph_for_chunks(entities)
+    
+    # --- NEU: Verwandte Themen holen ---
+    related_topics = get_related_topics_from_graph(entities)
     
     # --- SCHRITT 2: PARSEN ---
     q_clean, terms, must = parse_query(prompt) 
@@ -463,8 +501,6 @@ def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> 
     if graph_chunk_ids:
         with connect_db() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Wichtig: Stelle sicher, dass der Typ der ID (hier::text) 
-                # mit dem Typ in graph_chunk_ids (jetzt strings) übereinstimmt.
                 sql = f"""
                 SELECT {CHUNK_ID_COL}::text as id, {FILENAME_COL} as filename, {CHUNK_TEXT_COL} as text_content
                 FROM {KB_TABLE}
@@ -484,8 +520,8 @@ def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> 
     blocks = pick_context(ranked_chunks)
     ctx = ctx_to_text(blocks)
     
-    # --- SCHRITT 6: ZURÜCKGEBEN ---
-    return ctx, ranked_chunks # Gibt den Kontext und die Treffer zurück
+    # --- SCHRITT 6: ZURÜCKGEBEN (mit related_topics) ---
+    return ctx, ranked_chunks, related_topics
 
 # ------------------------------------------------------------------------------
 # Streamlit Hauptlogik
@@ -549,6 +585,9 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "berater_messages" not in st.session_state:
     st.session_state.berater_messages = []
+# --- NEU: Initialisierung für verwandte Themen ---
+if "related_topics" not in st.session_state:
+    st.session_state.related_topics = []
 
 
 # --- sac.tabs (Linksbündig) ---
@@ -572,8 +611,10 @@ if selected_tab == "Allgemeiner Chat":
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # --- NEUER AUFRUF: RAG-Pipeline ---
-        ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
+        # --- NEUER AUFRUF: RAG-Pipeline (ohne related_topics) ---
+        # (Im allgemeinen Chat zeigen wir keine verwandten Themen an, 
+        # daher ignorieren wir den 3. Rückgabewert)
+        ctx, ranked_chunks, _ = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
         
         if debug_hits:
             show_hits(ranked_chunks) 
@@ -718,7 +759,6 @@ if selected_tab == "Strategie Berater":
                     if data_sources_freitext:
                         all_data_sources.append(f"Weitere Details: {data_sources_freitext}")
 
-                    # Der 'mega_prompt' ist jetzt der Input für die Graph-Suche
                     mega_prompt_content = f"""
                     Der Nutzer benötigt eine KI-Implementierungs-Roadmap und Best Practices.
                     Situation des Nutzers:
@@ -734,8 +774,8 @@ if selected_tab == "Strategie Berater":
                     
                     user_message_display = f"Meine Situation: {company_details} (Größe: {company_size}). Meine Ziele sind: {', '.join(all_goals)}."
                     
-                    # --- NEUER AUFRUF: RAG-Pipeline ---
-                    ctx, ranked_chunks = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
+                    # --- ÄNDERUNG: 'related_topics' wird empfangen ---
+                    ctx, ranked_chunks, related_topics = run_rag_pipeline(mega_prompt_content, threshold, k, max_chunks_to_llm)
 
                     if debug_hits:
                         show_hits(ranked_chunks)
@@ -756,6 +796,9 @@ if selected_tab == "Strategie Berater":
                         
                         st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
                         st.session_state.berater_messages.append({"role": "assistant", "content": answer})
+                        
+                        # --- NEU: Verwandte Themen im Session State speichern ---
+                        st.session_state.related_topics = related_topics
                         
                         st.rerun()
 
@@ -780,6 +823,19 @@ if selected_tab == "Strategie Berater":
                         type="primary" 
                     )
                     st.divider()
+        
+        # --- NEU: Verwandte Themen anzeigen (NACH der Schleife) ---
+        if st.session_state.related_topics:
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown("**Themen, in denen Ihre Problematik ebenfalls angesprochen wird (Best Practices):**")
+                
+                # Zeigt die Themen als klickbare "Tags" an
+                # (Der Klick führt noch keine Aktion aus, dient als Vorschlag)
+                topics_md = " ".join([f"`{t}`" for t in st.session_state.related_topics])
+                st.info(f"Fragen Sie mich bei Interesse gerne nach: {topics_md}")
+            
+            # Themen nur einmal anzeigen
+            st.session_state.related_topics = []
 
         # Chat-Eingabefeld für FOLGEFRAGEN
         if prompt := st.chat_input("Stellen Sie eine Folgefrage zu Ihrer Strategie..."):
@@ -787,8 +843,8 @@ if selected_tab == "Strategie Berater":
             st.chat_message("user").markdown(prompt)
             st.session_state.berater_messages.append({"role": "user", "content": prompt})
 
-            # --- NEUER AUFRUF: RAG-Pipeline ---
-            ctx, ranked_chunks = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
+            # --- ÄNDERUNG: 'related_topics' wird empfangen ---
+            ctx, ranked_chunks, related_topics = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
             
             if debug_hits:
                 show_hits(ranked_chunks) 
@@ -819,6 +875,9 @@ if selected_tab == "Strategie Berater":
                 
                 st.chat_message("assistant").markdown(answer)
                 st.session_state.berater_messages.append({"role": "assistant", "content": answer})
+                
+                # --- NEU: Verwandte Themen im Session State speichern ---
+                st.session_state.related_topics = related_topics
                 st.rerun() 
 
             except Exception as e:
