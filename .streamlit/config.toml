@@ -1,7 +1,7 @@
 [theme]
 # Basis-Theme
 base = "light"
-font = "Playfair:https://fonts.googleapis.com/css2?family=Playfair&display=swap"
+font = "Tinos:https://fonts.googleapis.com/css2?family=Tinos&display=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono&display=swap"
 
 # --- Distinguiertes Farbschema (Mauve/Beige) ---
