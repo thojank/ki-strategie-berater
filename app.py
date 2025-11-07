@@ -895,9 +895,10 @@ if selected_tab == "Strategie Berater":
                 # Den State *vor* dem Anzeigen der Buttons leeren
                 st.session_state.related_topics = [] 
                 
+                # --- KORREKTUR: 'format_func' entfernt ---
                 clicked_topic = sac.buttons(
                     items=[sac.ButtonsItem(label=t) for t in topics_to_display],
-                    format_func='label',
+                    # format_func='label', <-- DIESE ZEILE WURDE ENTFERNT
                     variant='outline', 
                     size='small',
                     color='gray',
