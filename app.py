@@ -154,20 +154,28 @@ st.markdown(f"""
         border-radius: 0.25rem;
     }}
     
-    /* 3. Reiter (sac.tabs) sichtbarer machen (Ordner-Look) */
+    /* --- KORREKTUR: 2c. Rahmen für Text-Inputs und Text-Areas HINZUFÜGEN --- */
+    [data-testid="stTextInput"] > div > div > input,
+    [data-testid="stTextArea"] > div > textarea {{
+        border: 1px solid #DDDDDD !important;
+        border-radius: 0.25rem !important;
+        padding-left: 0.5rem; /* Kleiner Innenabstand */
+    }}
+    
+    /* 3. Reiter (sac.tabs) sichtbarer machen (Ordner-Look) - VERBESSERT */
     .sac-tabs-bar {{
         border-bottom: 2px solid #DDDDDD !important; /* Linie unter den Tabs */
     }}
     .sac-tabs-item {{
-        background-color: #F0F2F6 !important; /* Inaktive Tabs (hellgrau) */
+        background-color: #EAEAEA !important; /* Inaktive Tabs (dunkleres grau) */
         border-radius: 0.25rem 0.25rem 0 0 !important; /* Oben rund */
         margin-bottom: -2px !important; /* Überlappt die untere Linie */
-        border: 1px solid #DDDDDD !important;
+        border: 1px solid #DDDDDD !important; /* Schwächerer Rand */
         border-bottom: none !important;
     }}
     .sac-tabs-item-active {{
         background-color: #FFFFFF !important; /* Aktiver Tab (weiß) */
-        border: 2px solid #DDDDDD !important;
+        border: 2px solid #DDDDDD !important;  /* Stärkerer Rand */
         border-bottom: 2px solid #FFFFFF !important; /* "Schneidet" die Linie */
         color: #ea3323 !important; /* Rote Schrift (primaryColor) */
         font-weight: bold;
@@ -498,10 +506,11 @@ if "berater_messages" not in st.session_state:
 
 
 # --- sac.tabs (KORRIGIERT: mit icons, ohne Farbe) ---
+# KORREKTUR: align="left" statt "center"
 selected_tab = sac.tabs([
     sac.TabsItem(label='Strategie Berater', icon='robot'),
     sac.TabsItem(label='Allgemeiner Chat', icon='chat-dots'),
-], format_func='title', align='center', return_index=False) # color='' entfernt
+], format_func='title', align='left', return_index=False) # color='' entfernt
 # --- ENDE sac.tabs ---
 
 
@@ -600,14 +609,33 @@ if selected_tab == "Strategie Berater":
                 "ERP (z.B. SAP, Navision, JTL, Sage)",
                 "Produktionsdaten (z.B. IoT, Sensoren, BDE)"
             ]
-            data_sources = st.multiselect("Welche Datenquellen liegen vor? (Mehrfachauswahl)", data_sources_options)
+            
+            # --- KORREKTUR: Labels für Multiselect vereinheitlicht ---
+            st.markdown("Welche Datenquellen liegen vor? (Mehrfachauswahl)")
+            data_sources = st.multiselect(
+                "data_sources_hidden_label", # Eindeutiger Key, Label wird ausgeblendet
+                data_sources_options,
+                placeholder="Bitte auswählen...",
+                label_visibility="collapsed"
+            )
+            # --- ENDE KORREKTUR ---
+            
             data_sources_freitext = st.text_input("Andere Datenquellen oder Spezifizierung:", placeholder="z.B. Altes Warenwirtschaftssystem, diverse Access-DBs")
             
             departments_options = [
                 "Geschäftsführung", "Vertrieb / Sales", "Marketing", "Kundenservice / Support", "HR / Personal",
                 "Buchhaltung / Finanzen / Controlling", "Produktion / F&E / Dienstleistungserbringung", "IT / Administration", "Logistik / Einkauf / SCM"
             ]
-            departments = st.multiselect("Welche Abteilungen sind im Fokus? (Mehrfachauswahl)", departments_options)
+            
+            # --- KORREKTUR: Labels für Multiselect vereinheitlicht ---
+            st.markdown("Welche Abteilungen sind im Fokus? (Mehrfachauswahl)")
+            departments = st.multiselect(
+                "departments_hidden_label", # Eindeutiger Key
+                departments_options,
+                placeholder="Bitte auswählen...",
+                label_visibility="collapsed"
+            )
+            # --- ENDE KORREKTUR ---
 
             st.markdown("##### 3. Was ist Ihr Ziel?")
             
@@ -620,7 +648,17 @@ if selected_tab == "Strategie Berater":
                 "Neue digitale Geschäftsmodelle entwickeln",
                 "Entscheidungsfindung datenbasiert verbessern (z.B. Reports)"
             ]
-            goals_preselected = st.multiselect("Was sind Ihre Hauptziele? (Mehrfachauswahl)", goals_options)
+            
+            # --- KORREKTUR: Labels für Multiselect vereinheitlicht ---
+            st.markdown("Was sind Ihre Hauptziele? (Mehrfachauswahl)")
+            goals_preselected = st.multiselect(
+                "goals_hidden_label", # Eindeutiger Key
+                goals_options,
+                placeholder="Bitte auswählen...",
+                label_visibility="collapsed"
+            )
+            # --- ENDE KORREKTUR ---
+            
             goals_freitext = st.text_area("Weitere Ziele oder Details:", 
                                           placeholder="z.B. Automatisierung der Rechnungsprüfung, Analyse von Support-Tickets zur Produktverbesserung...")
 
@@ -652,7 +690,7 @@ if selected_tab == "Strategie Berater":
                     - Unternehmen / Branche: {company_details}
                     - Größe: {company_size}
                     - Relevante Abteilungen: {', '.join(departments) if departments else 'Nicht spezifiziert'}
-                    - Vorhandene Datenquellen: {', '.join(all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
+                    - Vorhandene Datenquellen: {', '.joi (all_data_sources) if all_data_sources else 'Nicht spezifiziert'}
                     - Hauptziele: {', '.join(all_goals)}
                     
                     Bitte finde die relevantesten Informationen zu Methoden, Roadmaps, Best Practices und Use Cases,
