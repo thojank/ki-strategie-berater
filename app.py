@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 31.3: HYBRID GRAPH RAG + VERWANDTE THEMEN)
+# Streamlit RAG (VERSION 31.4: HYBRID GRAPH RAG + Layout-Update)
 from __future__ import annotations
 
 import os, re, json
@@ -105,26 +105,35 @@ st.set_page_config(
 )
 
 st.title("KI-Strategie Berater") 
-st.sidebar.image("ciferecigo.png", width=200)
+# HINWEIS: Logo wird jetzt in der Sidebar gesetzt (siehe Zeile 618)
 
-# --- CSS-HACK (KORRIGIERT FÜR CHAT-INPUT) ---
+# --- CSS-HACK (Layout-Änderungen) ---
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
 
     <style>
+    /* 1. Main Content Area (hellgrau & abgesetzt) */
     .main .block-container {{
         padding-top: 2rem;
         padding-bottom: 2rem;
         padding-left: 3rem;
         padding-right: 3rem;
     }}
+    /* Ziel auf den Hauptcontainer, nicht die Sidebar */
+    div[data-testid="stVerticalBlock"] > div:not([data-testid="stSidebar"]) > div.block-container {{
+         background-color: #FAFAFA; /* Hellgrau */
+         border-left: 1px solid #DDDDDD; /* Trennlinie */
+    }}
     
+    
+    /* 2. Formular-Styling (unverändert) */
     [data-testid="stForm"] {{
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
     }}
 
+    /* 3. Input-Felder Styling (unverändert) */
     [data-testid="stSelectbox"] > div {{
         border: 1px solid #DDDDDD !important; 
         border-radius: 0.25rem;
@@ -140,6 +149,7 @@ st.markdown(f"""
         padding-left: 0.5rem; 
     }}
     
+    /* 4. Tab-Styling (unverändert) */
     .sac-tabs-bar {{
         border-bottom: 2px solid #DDDDDD !important; 
     }}
@@ -150,32 +160,38 @@ st.markdown(f"""
         border: 1px solid #DDDDDD !important; 
         border-bottom: none !important;
     }}
+    
+    /* 5. Aktiver Tab (JETZT FARBIG) */
     .sac-tabs-item-active {{
-        background-color: #FFFFFF !important; 
-        border: 2px solid #DDDDDD !important;  
-        border-bottom: 2px solid #FFFFFF !important; 
-        color: #ea3323 !important; 
+        background-color: #ea3323 !important; /* Rote Farbe (primaryColor) */
+        color: #FFFFFF !important; /* Weiße Schrift */
+        border: 2px solid #ea3323 !important;  
+        border-bottom: 2px solid #FAFAFA !important; /* "Schneidet" die Linie mit der neuen Main-BG-Farbe */
         font-weight: bold;
     }}
 
-    /* --- KORREKTUR: Roter Rand für Chat-Eingabefeld (Suchschlitz) --- */
+    /* 6. Suchschlitz-Rand (KORRIGIERT FÜR FOKUS-FORM) */
     div[data-testid="stChatInput"] {{
         border: 1px solid #ea3323 !important;
-        border-radius: 0.5rem !important; /* Passt zum Streamlit-Stil */
-        background-color: #FFFFFF; /* Stellt sicher, dass der Hintergrund weiß ist */
+        border-radius: 0.5rem !important; /* Runde Ecken */
+        background-color: #FFFFFF;
     }}
 
-    /* Wir entfernen den inneren Rand, um Dopplungen zu vermeiden */
+    /* Entfernt den inneren Rand, um Dopplungen zu vermeiden */
     div[data-testid="stChatInput"] div[data-baseweb="input"] {{
          border: none !important;
          box-shadow: none !important;
          background-color: transparent !important;
     }}
 
-    /* Roter "Glow" beim Klicken */
+    /* Roter "Glow" (auf dem äußeren Container) */
     div[data-testid="stChatInput"]:focus-within {{
         border-color: #ea3323 !important;
         box-shadow: 0 0 0 2px #ea332333 !important; /* Heller roter Schatten */
+    }}
+    /* Stellt sicher, dass der innere Input keinen eigenen blauen Glow bekommt */
+    div[data-testid="stChatInput"] div[data-baseweb="input"]:focus-within {{
+        box-shadow: none !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -289,11 +305,6 @@ def get_related_topics_from_graph(entities: List[str]) -> List[str]:
     if not entities:
         return []
     
-    # Query:
-    # 1. Finde Knoten (n1) für die Entitäten, nach denen der User gefragt hat.
-    # 2. Folge Kanten (e) zu *anderen* Knoten (n2).
-    # 3. Gib die Namen dieser *anderen* Knoten (n2.name) zurück.
-    # 4. Stelle sicher, dass wir nicht die ursprünglichen Entitäten selbst zurückgeben.
     query = """
     SELECT DISTINCT n2.name
     FROM public.ki_strat_nodes AS n1
@@ -527,57 +538,66 @@ def run_rag_pipeline(prompt: str, threshold: float, k: int, max_chunks: int) -> 
 # Streamlit Hauptlogik
 # ------------------------------------------------------------------------------
 
-# --- Sidebar ---
+# --- NEUE SIDEBAR-STRUKTUR ---
 with st.sidebar:
-    st.subheader("Such-Einstellungen")
+    # 1. Bild
+    st.sidebar.image("ciferecigo.png", width=67) # 1/3 von 200px
     
-    threshold = st.slider(
-        "Ähnlichkeits-Threshold (Vektor)", 
-        min_value=0.0, max_value=1.0, value=0.01, step=0.01,
-        help="Mindest-Score für die Vektorsuche. 0.01 = fast alles erlauben, 0.8 = nur Top-Treffer."
+    # 2. Über uns Text & Button
+    st.markdown("**Der KI Berater**")
+    st.markdown(
+        """
+        Dieses Tool wurde von Thorsten Jankowski / ciferecigo entwickelt.
+        Wir helfen KMUs und dem Mittelstand, KI-Strategien erfolgreich umzusetzen.
+        """
     )
-    
-    k = st.slider(
-        "Maximale Treffer (K)", 
-        min_value=3, max_value=20, value=10, step=1,
-        help="Maximale Anzahl Treffer, die Vektor- und Keyword-Suche *initial* holen."
+    st.link_button(
+        "Kostenloses Erstgespräch buchen", 
+        "https://calendar.app.google/kemaHAmTcqB2k5bE9",
+        use_container_width=True
     )
-    
-    max_chunks_to_llm = st.slider(
-        "Kontext-Abschnitte (Chunks)",
-        min_value=1, max_value=10, value=5, step=1,
-        help="Anzahl der besten Chunks, die als Kontext an das LLM gesendet werden."
-    )
+    st.divider()
 
+    # 3. Modell-Einstellungen
     st.subheader("Modell-Einstellungen")
     chat_model = st.text_input("Chat-Modell", DEFAULT_CHAT_MODEL)
     embed_model = st.text_input("Embedding-Modell", DEFAULT_EMBED_MODEL)
-    
     debug_hits = st.checkbox("Debug-Modus (Treffer anzeigen)", value=True)
-    
+
+    # 4. Verläufe löschen
     clicked_button = sac.buttons(
         items=[
             sac.ButtonsItem(label='Alle Verläufe löschen', icon='trash')
         ],
         format_func='title', 
-        index=None 
+        index=None,
+        use_container_width=True
     )
-
     if clicked_button == 'Alle Verläufe löschen':
         st.session_state.messages = []
         st.session_state.berater_messages = []
         st.rerun()
     
     st.divider()
-    st.markdown(
-        """
-        **Über diesen Berater**\n
-        Dieses Tool wurde von Thorsten Jankowski (ciferecigo) entwickelt.\n
-        Wir helfen KMUs und dem Mittelstand, KI-Strategien erfolgreich umzusetzen.
-        
-        [**Kostenloses Erstgespräch buchen**](https://calendar.app.google/kemaHAmTcqB2k5bE9)
-        """
+
+    # 5. Such-Einstellungen
+    st.subheader("Such-Einstellungen")
+    threshold = st.slider(
+        "Ähnlichkeits-Threshold (Vektor)", 
+        min_value=0.0, max_value=1.0, value=0.01, step=0.01,
+        help="Mindest-Score für die Vektorsuche. 0.01 = fast alles erlauben, 0.8 = nur Top-Treffer."
     )
+    k = st.slider(
+        "Maximale Treffer (K)", 
+        min_value=3, max_value=20, value=10, step=1,
+        help="Maximale Anzahl Treffer, die Vektor- und Keyword-Suche *initial* holen."
+    )
+    max_chunks_to_llm = st.slider(
+        "Kontext-Abschnitte (Chunks)",
+        min_value=1, max_value=10, value=5, step=1,
+        help="Anzahl der besten Chunks, die als Kontext an das LLM gesendet werden."
+    )
+# --- ENDE SIDEBAR ---
 
 
 # --- Initialisierung der Chat-Verläufe (2x) ---
@@ -612,8 +632,6 @@ if selected_tab == "Allgemeiner Chat":
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         # --- NEUER AUFRUF: RAG-Pipeline (ohne related_topics) ---
-        # (Im allgemeinen Chat zeigen wir keine verwandten Themen an, 
-        # daher ignorieren wir den 3. Rückgabewert)
         ctx, ranked_chunks, _ = run_rag_pipeline(prompt, threshold, k, max_chunks_to_llm)
         
         if debug_hits:
@@ -830,7 +848,6 @@ if selected_tab == "Strategie Berater":
                 st.markdown("**Themen, in denen Ihre Problematik ebenfalls angesprochen wird (Best Practices):**")
                 
                 # Zeigt die Themen als klickbare "Tags" an
-                # (Der Klick führt noch keine Aktion aus, dient als Vorschlag)
                 topics_md = " ".join([f"`{t}`" for t in st.session_state.related_topics])
                 st.info(f"Fragen Sie mich bei Interesse gerne nach: {topics_md}")
             
