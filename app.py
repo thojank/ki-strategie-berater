@@ -1,5 +1,5 @@
 # app.py
-# Streamlit RAG (VERSION 32.4: SyntaxError-Fix)
+# Streamlit RAG (VERSION 32.6: Halluzinations-Kennzeichnung)
 from __future__ import annotations
 
 import os, re, json
@@ -50,18 +50,18 @@ else:
     openai.api_key = OPENAI_API_KEY
     client = openai
 
-# System Prompt für den Chat
+# --- KORRIGIERTER SYSTEM PROMPT (weniger streng) ---
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """
-DEINE WICHTIGSTE REGEL: Du darfst unter KEINEN UMSTÄNDEN Wissen außerhalb des bereitgestellten KONTEXTS verwenden.
-- Wenn der KONTEXT leer ist oder die Frage nicht beantworten kann (z.B. der Kontext lautet "(Es wurde kein Kontext gefunden.)"), MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden." Es gibt keine Ausnahmen.
-- Wenn KONTEXT vorhanden ist: Beantworte die Frage des Nutzers präzise und ausschließlich auf Basis dieses KONTEXTS.
+Du bist ein hilfreicher Assistent. Deine Aufgabe ist es, die Fragen des Nutzers ausschließlich auf Basis des untenstehenden KONTEXTS zu beantworten.
+- Antworte immer auf Basis des KONTEXTS. ES IST ABSOLUT VERBOTEN, WISSEN AUSSERHALB DES KONTEXTS ZU VERWENDEN.
+- Wenn der KONTEXT relevante Informationen enthält, beantworte die Frage des Nutzers, auch wenn der Kontext die Frage nicht zu 100% exakt beantwortet. Fasse zusammen, was der Kontext sagt.
+- Wenn der KONTEXT komplett leer ist (z.B. lautet "(Es wurde kein Kontext gefunden.)") oder offensichtlich nichts mit der Frage zu tun hat, MUSST du mit exakt diesem Satz antworten: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
 - Antworte auf Deutsch.
-- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext, falls der Kontext genutzt wurde.
-- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich (dies ist die EINZIGE Ausnahme, bei der du ohne Kontext antworten darfst).
-- ERINNERUNG: Wenn die Frage spezifisch ist und der KONTEXT leer ist, lautet die ANTWORT IMMER: "Ich konnte diese Information nicht in meiner Wissensdatenbank finden."
+- Zitiere am Ende deiner Antwort die Quellen (filename) aus dem Kontext.
+- Bei allgemeinen Fragen (z.B. 'Hallo') antworte höflich.
 """)
 
-# System-Prompt für den Berater (ANGEPASST FÜR AKQUISE)
+# --- KORRIGIERTER CONFIGURATOR PROMPT (weniger streng) ---
 CONFIGURATOR_SYSTEM_PROMPT = """
 Du bist ein Experte für KI-Strategieberatung, spezialisiert auf KMUs und Mittelstand.
 Du führst ein Beratungsgespräch.
@@ -629,13 +629,10 @@ with tab_chat:
             with st.expander("⬇️ KONTEXT, der in die Antwort geht", expanded=False):
                 st.code(ctx)
         
-        if not ctx.strip():
-            st.warning("Keine relevanten Kontext-Abschnitte gefunden.")
-        
         messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages_for_api.extend(st.session_state.messages) 
 
-        # --- HALLUZINATIONS-FIX ---
+        # --- KORREKTUR: Halluzinations-Labeling (ersetzt Hard-Code Fix) ---
         last_user_message = messages_for_api.pop() 
         if ctx.strip():
             messages_for_api.append({
@@ -643,12 +640,10 @@ with tab_chat:
                 "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n{ctx}"
             })
         else:
-            # WICHTIG: Sende den leeren Kontext, um die Regel im System Prompt zu triggern
             messages_for_api.append({
                 "role": "user",
                 "content": f"Frage: {last_user_message['content']}\n\nKONTEXT:\n(Es wurde kein Kontext gefunden.)"
             })
-        # --- ENDE FIX ---
 
         try:
             with st.spinner("KI-Assistent denkt nach..."):
@@ -656,15 +651,25 @@ with tab_chat:
                     res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                     answer = res.choices[0].message.content
                 else:
-                    # --- HIER WAR DER SYNTAXFEHLER ---
                     res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                     answer = res['choices'][0]['message']['content']
-            
-            st.chat_message("assistant").markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
-
+        
         except Exception as e:
             st.error(f"Fehler bei der OpenAI ChatCompletion API: {e}")
+            answer = "Ein Fehler ist aufgetreten."
+
+        # --- HIER IST DIE NEUE KENNZEICHNUNGS-LOGIK ---
+        warning_message = ""
+        if not ctx.strip() and "Ich konnte diese Information nicht" not in answer:
+            warning_message = (
+                "> *__Hinweis:__ Diese Information stammt aus dem allgemeinen Wissen der KI, "
+                "da ich sie nicht in meiner Wissensdatenbank finden konnte.*\n\n"
+            )
+        
+        final_answer = warning_message + answer
+        st.chat_message("assistant").markdown(final_answer)
+        st.session_state.messages.append({"role": "assistant", "content": final_answer})
+
 
 # --- TAB 2: Strategie Berater (NEUE STRUKTUR) ---
 with tab_berater:
@@ -796,7 +801,6 @@ with tab_berater:
                     
                     # 1. Graph-Suche (mit SPEZIFISCHEN Formular-Entitäten)
                     manual_entities = [branche, company_size] + departments + all_goals
-                    # Bereinigen (z.B. "(Bitte auswählen)" entfernen)
                     manual_entities = [e for e in manual_entities if e and "(Bitte auswählen)" not in e]
                     
                     with st.sidebar.expander("Entitäts-Extraktion (Graph-Debug)", expanded=True):
@@ -838,34 +842,41 @@ with tab_berater:
                         with st.expander("⬇️ KONTEXT, der in die Antwort geht", expanded=False):
                             st.code(ctx)
                     
-                    if not ctx.strip():
-                        st.warning("Es wurden keine spezifischen Kontext-Abschnitte für diese Konfiguration gefunden. Die Antwort wird allgemeiner ausfallen.")
-                    
-                    # --- HALLUZINATIONS-FIX ---
                     messages_for_api = [ {"role": "system", "content": CONFIGURATOR_SYSTEM_PROMPT} ]
                     user_message_content = f"Nutzer-Anfrage (basierend auf Formular):\n{mega_prompt_content}\n\n"
                     
                     if ctx.strip():
                         user_message_content += f"KONTEXT:\n{ctx}"
                     else:
+                        st.warning("Es wurden keine spezifischen Kontext-Abschnitte für diese Konfiguration gefunden.")
                         user_message_content += "KONTEXT:\n(Es wurde kein Kontext gefunden.)"
                     
                     messages_for_api.append({"role": "user", "content": user_message_content})
-                    # --- ENDE FIX ---
                     
                     try:
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
-                        
-                        st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
-                        st.session_state.berater_messages.append({"role": "assistant", "content": answer})
-                        
-                        st.session_state.related_topics = related_topics
-                        
-                        st.rerun()
-
+                    
                     except Exception as e:
                         st.error(f"Fehler bei der OpenAI ChatCompletion API: {e}")
+                        answer = "Ein Fehler ist aufgetreten."
+
+                    # --- KORREKTUR: Halluzinations-Labeling ---
+                    warning_message = ""
+                    if not ctx.strip() and "Ich konnte diese Information nicht" not in answer:
+                        warning_message = (
+                            "> *__Hinweis:__ Diese Information stammt aus dem allgemeinen Wissen der KI, "
+                            "da ich sie nicht in meiner Wissensdatenbank finden konnte.*\n\n"
+                        )
+                    
+                    final_answer = warning_message + answer
+                    st.session_state.berater_messages.append({"role": "user", "content": user_message_display})
+                    st.session_state.berater_messages.append({"role": "assistant", "content": final_answer})
+                    
+                    st.session_state.related_topics = related_topics
+                    
+                    st.rerun()
+
     
     # FALL 2: Das Gespräch läuft bereits -> Zeige Chat-Verlauf und Eingabefeld
     else:
@@ -959,16 +970,25 @@ with tab_berater:
                         res = client.chat.completions.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res.choices[0].message.content
                     else:
-                        # --- HIER WAR DER SYNTAXFEHLER ---
                         res = client.ChatCompletion.create(model=chat_model, messages=messages_for_api, temperature=0.1)
                         answer = res['choices'][0]['message']['content']
-                
-                st.chat_message("assistant").markdown(answer)
-                st.session_state.berater_messages.append({"role": "assistant", "content": answer})
-                
-                # Speichere die NEUEN Themen für den nächsten Durchlauf
-                st.session_state.related_topics = related_topics
-                st.rerun() 
-
+            
             except Exception as e:
                 st.error(f"Fehler bei der OpenAI ChatCompletion API: {e}")
+                answer = "Ein Fehler ist aufgetreten."
+
+            # --- KORREKTUR: Halluzinations-Labeling ---
+            warning_message = ""
+            if not ctx.strip() and "Ich konnte diese Information nicht" not in answer:
+                warning_message = (
+                    "> *__Hinweis:__ Diese Information stammt aus dem allgemeinen Wissen der KI, "
+                    "da ich sie nicht in meiner Wissensdatenbank finden konnte.*\n\n"
+                )
+            
+            final_answer = warning_message + answer
+            st.chat_message("assistant").markdown(final_answer)
+            st.session_state.berater_messages.append({"role": "assistant", "content": final_answer})
+            
+            # Speichere die NEUEN Themen für den nächsten Durchlauf
+            st.session_state.related_topics = related_topics
+            st.rerun()
